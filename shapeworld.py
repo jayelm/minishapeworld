@@ -553,19 +553,17 @@ def generate(n,
              data_type='concept',
              img_func=generate_spatial,
              float_type=False,
-             n_cpu=None,
              pool=None,
-             do_mp=True,
+             workers=0,
              verbose=False):
+    do_mp = workers > 0
     if not do_mp and pool is not None:
         raise ValueError("Can't specify pool if do_mp=True")
     if do_mp:
         pool_was_none = False
         if pool is None:
             pool_was_none = True
-            if n_cpu is None:
-                n_cpu = mp.cpu_count()
-            pool = mp.Pool(n_cpu)
+            pool = mp.Pool(workers)
 
     if data_type == 'concept':
         if n_images == 4:
@@ -614,50 +612,63 @@ def generate(n,
     return {'imgs': all_imgs, 'labels': all_labels, 'langs': langs}
 
 
-def save_images(img_dir, data):
-    # Save to test directory
-    for instance_idx, (instance, instance_labels, *rest) in enumerate(data):
-        for world_idx, (world, label) in enumerate(
-                zip(instance, instance_labels)):
-            Image.fromarray(world).save(
-                os.path.join(img_dir, '{}_{}.png'.format(instance_idx, world_idx)))
+HTML_TEMPLATE = '''
+<!DOCTYPE html>
+<html>
+<head>
+<title>Shapeworld</title>
+<style>
+body {{ font-family: sans-serif; }}
+img {{ padding: 10px; }}
+img.yes {{ background-color: green; }}
+img.no {{ background-color: red; }}
+div.example {{ background-color: #eeeeee; }}
+</style>
+</head>
+<body>
+{}
+</body>
+</html>
+'''
 
+def make_example_html(example_i, labels, lang):
+    return '<div class="example"><h1>{}</h1><p>{}</p></div>'.format(
+        lang,
+        make_image_html(example_i, labels)
+    )
+
+
+def make_image_html(example_i, labels):
+    text_labels = ['no', 'yes']
+    if len(labels.shape) > 0:
+        return ''.join(
+            '<img src="{}_{}.png" class="{}">'.format(example_i, image_i, text_labels[label])
+            for image_i, label in enumerate(labels)
+        )
+    else:
+        return '<img src="{}.png">'.format(example_i)
+
+
+def visualize(img_dir, data, n=100):
+    # Save to test directory
+    data = {k: v[:n] for k, v in data.items()}
+    data_arr = list(zip(data['imgs'], data['labels'], data['langs']))
+    for example_i, (example, labels, lang) in enumerate(data_arr):
+        if len(example.shape) == 3:
+            # Caption dataset
+            Image.fromarray(example).save(
+                os.path.join(img_dir, '{}.png'.format(example_i)))
+        else:
+            for image_i, image in enumerate(example):
+                Image.fromarray(image).save(
+                    os.path.join(img_dir, '{}_{}.png'.format(example_i, image_i)))
+
+    example_html = [make_example_html(example_i, labels, lang)
+                    for example_i, (example, labels, lang) in enumerate(data_arr)]
     index_fname = os.path.join(img_dir, 'index.html')
     with open(index_fname, 'w') as f:
         # Sorry for this code
-        f.write('''
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <title>Shapeworld Fast</title>
-            <style>
-            img {{
-                padding: 10px;
-            }}
-            img.yes {{
-                background-color: green;
-            }}
-            img.no {{
-                background-color: red;
-            }}
-            </style>
-            </head>
-            <body>
-            {}
-            </body>
-            </html>
-            '''.format(''.join(
-            '<h1>{}</h1><p>{}</p>'.format(
-                ' '.join(lang), ''.join(
-                    '<img src="{}_{}.png" class="{}">'.format(
-                        instance_idx, world_idx, 'yes' if label else 'no')
-                    for world_idx, (
-                        world,
-                        label) in enumerate(zip(instance, instance_labels))))
-            for instance_idx, (
-                instance, instance_labels,
-                lang, *rest) in enumerate(data))))
-    np.savez_compressed('test.npz', imgs=data.imgs, labels=data.labels)
+        f.write(HTML_TEMPLATE.format(''.join(example_html)))
 
 
 IMG_FUNCS = {
@@ -680,7 +691,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--correct', type=float, default=0.5, help='Avg correct proportion of images (concept only)')
     parser.add_argument(
-        '--no_mp', action='store_true', help='Don\'t use multiprocessing')
+        '--workers', default=0, type=int, help="Number of workers (0 = no multiprocessing)")
     parser.add_argument(
         '--data_type', choices=['concept', 'reference', 'caption'], default='concept',
         help='What kind of data to generate')
@@ -690,6 +701,10 @@ if __name__ == '__main__':
     parser.add_argument(
         '--vis_dir', default=None, type=str,
         help='If specified, save sample visualization of data (100 images) to this folder'
+    )
+    parser.add_argument(
+        '--n_vis', default=100, type=int,
+        help='How many examples to visualize?'
     )
     parser.add_argument(
         '--save', default='test.npz',
@@ -702,10 +717,10 @@ if __name__ == '__main__':
         args.n_examples, args.n_images, args.correct, verbose=True,
         data_type=args.data_type,
         img_func=IMG_FUNCS[args.img_type],
-        do_mp=not args.no_mp)
+        workers=args.workers)
 
     np.savez_compressed(args.save, **data)
 
     if args.vis_dir is not None:
         os.makedirs(args.vis_dir, exist_ok=True)
-        save_images(args.vis_dir, data)
+        visualize(args.vis_dir, data, n=args.n_vis)
