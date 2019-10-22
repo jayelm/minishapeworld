@@ -21,8 +21,6 @@ The kinds of images (and captions) generated can be specified with the
 - `spatial`: Spatial captions (e.g. "blue square", "square", "blue
     shape")
 
-TODO: implement support for distractor shapes.
-
 ## Dependencies
 
 - Python 3.6+
