@@ -4,6 +4,7 @@ Converting configs to language.
 
 import config
 
+
 def fmt_config(cfg):
     if isinstance(cfg, config.SingleConfig):
         return _fmt_config_single(cfg)
