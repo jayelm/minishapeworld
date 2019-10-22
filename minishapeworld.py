@@ -80,12 +80,7 @@ class MiniShapeWorld:
                 pool = mp.Pool(workers)
 
         if self.data_type == 'concept':
-            if n_images == 4:
-                print(
-                    "Warning: n_images == 4, min targets/distractors both 2, no variance"
-                )
-            else:
-                assert n_images > 4, "Too few n_images"
+            assert n_images > 4, "Too few n_images"
         elif self.data_type == 'reference':
             assert n_images > 1, "Too few n_images"
         elif self.data_type == 'caption':
@@ -180,9 +175,8 @@ class MiniShapeWorld:
                         break
                 else:
                     # Failed
-                    raise RuntimeError(
-                        "Could not place distractor onto image without intersection"
-                    )
+                    raise RuntimeError("Could not place distractor onto "
+                                       "image without intersection")
 
             # Create image and draw shapes
             img = image.IMG()
