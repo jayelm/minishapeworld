@@ -2,252 +2,18 @@
 Generate shapeworld reference games
 """
 
-from shapely.geometry import Point, box, Polygon
-from shapely import affinity
 import numpy as np
 from numpy import random
-from PIL import Image
-import aggdraw
-from enum import Enum
 from tqdm import tqdm
 import os
 import multiprocessing as mp
-from collections import namedtuple
 
-DIM = 64
-X_MIN, X_MAX = (8, 48)
-ONE_QUARTER = (X_MAX - X_MIN) // 3
-X_MIN_34, X_MAX_34 = (X_MIN + ONE_QUARTER, X_MAX - ONE_QUARTER)
-BUFFER = 10
-SIZE_MIN, SIZE_MAX = (2, 8)
-
-MAX_UINT8 = np.float32(255)
-
-SHAPES = ['circle', 'square', 'rectangle', 'ellipse', 'triangle']
-COLORS = ['red', 'blue', 'green', 'yellow', 'white', 'gray']
-BRUSHES = {c: aggdraw.Brush(c) for c in COLORS}
-PENS = {c: aggdraw.Pen(c) for c in COLORS}
-
-MAX_PLACEMENT_ATTEMPTS = 5
-MAX_DISTRACTOR_PLACEMENT_ATTEMPTS = 100
-
-
-class ShapeSpec(Enum):
-    SHAPE = 0
-    COLOR = 1
-    BOTH = 2
-
-
-class ConfigProps(Enum):
-    SHAPE_1_COLOR = 0
-    SHAPE_1_SHAPE = 1
-    SHAPE_2_COLOR = 2
-    SHAPE_2_SHAPE = 3
-    RELATION_DIR = 4
-
-
-SHAPE_SPECS = list(ShapeSpec)
-
-
-class IMG:
-    def __init__(self):
-        self.image = Image.new('RGB', (DIM, DIM))
-        self.draw = aggdraw.Draw(self.image)
-
-    def draw_shapes(self, shapes, flush=True):
-        for shape_ in shapes:
-            shape_.draw(self)
-        if flush:
-            self.draw.flush()
-
-    def show(self):
-        self.image.show()
-
-    def array(self):
-        return np.array(self.image, dtype=np.uint8)
-
-    def float_array(self):
-        return np.divide(np.array(self.image), MAX_UINT8)
-
-    def save(self, path, filetype='PNG'):
-        self.image.save(path, filetype)
-
-
-def rand_size():
-    return random.randint(SIZE_MIN, SIZE_MAX)
-
-
-def rand_size_2():
-    """Slightly bigger."""
-    return random.randint(SIZE_MIN + 2, SIZE_MAX + 2)
-
-
-def rand_pos():
-    return random.randint(X_MIN, X_MAX)
-
-
-class Shape:
-    def __init__(self,
-                 x=None,
-                 y=None,
-                 relation=None,
-                 relation_dir=None,
-                 color_=None):
-        if color_ is None:
-            raise NotImplementedError("Must specify color")
-        self.color = color_
-        if x is not None or y is not None:
-            assert x is not None and y is not None
-            assert relation is None and relation_dir is None
-            self.x = x
-            self.y = y
-        elif relation is None and relation_dir is None:
-            self.x = rand_pos()
-            self.y = rand_pos()
-        else:
-            # Generate on 3/4 of image according to relation dir
-            if relation == 0:
-                # x matters - y is totally random
-                self.y = rand_pos()
-                if relation_dir == 0:
-                    # Place right 3/4 of screen, so second shape
-                    # can be placed LEFT
-                    self.x = random.randint(X_MIN_34, X_MAX)
-                else:
-                    # Place left 3/4
-                    self.x = random.randint(X_MIN, X_MAX_34)
-            else:
-                # y matters - x is totally random
-                self.x = rand_pos()
-                if relation_dir == 0:
-                    # Place top 3/4 of screen, so second shape can be placed
-                    # BELOW
-                    # NOTE: Remember coords for y travel in opp dir
-                    self.y = random.randint(X_MIN, X_MAX_34)
-                else:
-                    self.y = random.randint(X_MIN_34, X_MAX)
-        self.init_shape()
-
-    def draw(self, image):
-        image.draw.polygon(self.coords, PENS[self.color])
-
-    def intersects(self, oth):
-        return self.shape.intersects(oth.shape)
-
-
-class Ellipse(Shape):
-    def init_shape(self, min_skew=1.5):
-        self.dx = rand_size()
-        # Dy must be at least 1.6x dx, to remove ambiguity with circle
-        bigger = int(self.dx * min_skew)
-        if bigger >= SIZE_MAX:
-            smaller = int(self.dx / min_skew)
-            assert smaller > SIZE_MIN, ("{} {}".format(smaller, self.dx))
-            self.dy = random.randint(SIZE_MIN, smaller)
-        else:
-            self.dy = random.randint(bigger, SIZE_MAX)
-        if random.random() < 0.5:
-            # Switch dx, dy
-            self.dx, self.dy = self.dy, self.dx
-
-        shape_ = Point(self.x, self.y).buffer(1)
-        shape_ = affinity.scale(shape_, self.dx, self.dy)
-        shape_ = affinity.rotate(shape_, random.randint(360))
-        self.shape = shape_
-
-        self.coords = np.round(np.array(self.shape.boundary).astype(np.int))
-        self.coords = np.unique(self.coords, axis=0).flatten()
-
-
-class Circle(Ellipse):
-    def init_shape(self):
-        self.r = rand_size()
-        self.shape = Point(self.x, self.y).buffer(self.r)
-        self.coords = [int(x) for x in self.shape.bounds]
-
-    def draw(self, image):
-        image.draw.ellipse(self.coords, BRUSHES[self.color])
-
-
-class Rectangle(Shape):
-    def init_shape(self, min_skew=1.5):
-        self.dx = rand_size_2()
-        bigger = int(self.dx * min_skew)
-        if bigger >= SIZE_MAX:
-            smaller = int(self.dx / min_skew)
-            self.dy = random.randint(SIZE_MIN, smaller)
-        else:
-            self.dy = random.randint(bigger, SIZE_MAX)
-        if random.random() < 0.5:
-            # Switch dx, dy
-            self.dx, self.dy = self.dy, self.dx
-
-        shape_ = box(self.x, self.y, self.x + self.dx, self.y + self.dy)
-        # Rotation
-        shape_ = affinity.rotate(shape_, random.randint(90))
-        self.shape = shape_
-
-        # Get coords
-        self.coords = np.round(
-            np.array(self.shape.exterior.coords)[:-1].flatten()).astype(
-                np.int).tolist()
-
-    def draw(self, image):
-        image.draw.polygon(self.coords, BRUSHES[self.color], PENS[self.color])
-
-
-class Square(Rectangle):
-    def init_shape(self):
-        self.size = rand_size_2()
-        shape_ = box(self.x, self.y, self.x + self.size, self.y + self.size)
-        # Rotation
-        shape_ = affinity.rotate(shape_, random.randint(90))
-        self.shape = shape_
-
-        # Get coords
-        self.coords = np.round(
-            np.array(self.shape.exterior.coords)[:-1].flatten()).astype(
-                np.int).tolist()
-
-
-class Triangle(Shape):
-    """
-    Equilateral triangles
-    """
-
-    def init_shape(self):
-        self.size = rand_size_2()
-        # X and Y are the center of the shape and size is the length of one
-        # side. Assume one point lies directly above the center. Then:
-        # https://math.stackexchange.com/questions/1344690/is-it-possible-to-find-the-vertices-of-an-equilateral-triangle-given-its-center
-        shape_ = Polygon([
-            (self.x, self.y + np.sqrt(3) * self.size / 3),
-            (self.x - self.size / 2, self.y - np.sqrt(3) * self.size / 6),
-            (self.x + self.size / 2, self.y - np.sqrt(3) * self.size / 6),
-        ])
-        # Rotation
-        shape_ = affinity.rotate(shape_, random.randint(90))
-        self.shape = shape_
-
-        self.coords = np.round(
-            np.array(self.shape.exterior.coords)[:-1].flatten()).astype(
-                np.int).tolist()
-
-    def draw(self, image):
-        image.draw.polygon(self.coords, BRUSHES[self.color], PENS[self.color])
-
-
-SHAPE_IMPLS = {
-    'circle': Circle,
-    'ellipse': Ellipse,
-    'square': Square,
-    'rectangle': Rectangle,
-    'triangle': Triangle
-    # TODO: semicircle
-}
-
-SpatialConfig = namedtuple('SpatialConfig', ['shapes', 'relation', 'dir'])
-SingleConfig = namedtuple('SingleConfig', ['shape', 'color'])
+import image
+import color
+import shape
+import config
+import constants as c
+import vis
 
 
 class MiniShapeWorld:
@@ -286,9 +52,9 @@ class MiniShapeWorld:
             self.img_func = self.generate_single
 
         if colors is None:
-            colors = COLORS
+            colors = color.COLORS
         if shapes is None:
-            shapes = SHAPES
+            shapes = shape.SHAPES
         self.colors = colors
         self.shapes = shapes
 
@@ -337,17 +103,17 @@ class MiniShapeWorld:
             gen_iter = map(self.img_func, mp_args)
         if verbose:
             gen_iter = tqdm(gen_iter, total=n)
-        for imgs, labels, config, i in gen_iter:
+        for imgs, labels, cfg, i in gen_iter:
             all_imgs[i, ] = imgs
             all_labels[i, ] = labels
-            configs.append(config)
+            configs.append(cfg)
 
         if do_mp and pool_was_none:  # Remember to close the pool
             pool.close()
             pool.join()
 
         if float_type:
-            all_imgs = np.divide(all_imgs, MAX_UINT8)
+            all_imgs = np.divide(all_imgs, 255.0)
             all_labels = all_labels.astype(np.float32)
         langs = np.array([fmt_config(c) for c in configs], dtype=np.unicode)
 
@@ -367,7 +133,7 @@ class MiniShapeWorld:
         # Get shapes and relations
         imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
-        config = self.random_config_spatial()
+        cfg = self.random_config_spatial()
         # Minimum of 2 correct worlds/2 distractors
         if self.data_type == 'concept':
             n_target = 2
@@ -386,13 +152,13 @@ class MiniShapeWorld:
                 n_distract -= 1
             else:
                 label = (random.random() < correct)
-            new_config = config if label else self.invalidate_spatial(config)
-            (ss1, ss2), relation, relation_dir = new_config
+            new_cfg = cfg if label else self.invalidate_spatial(cfg)
+            (ss1, ss2), relation, relation_dir = new_cfg
             s2 = self.add_shape_from_spec(ss2, relation, relation_dir)
 
             # Place second shape
             attempts = 0
-            while attempts < MAX_PLACEMENT_ATTEMPTS:
+            while attempts < c.MAX_PLACEMENT_ATTEMPTS:
                 s1 = self.add_shape_rel(ss1, s2, relation, relation_dir)
                 if not s2.intersects(s1):
                     break
@@ -407,7 +173,7 @@ class MiniShapeWorld:
                 existing_shapes=existing_shapes)
             for dss in distractors:
                 attempts = 0
-                while attempts < MAX_DISTRACTOR_PLACEMENT_ATTEMPTS:
+                while attempts < c.MAX_DISTRACTOR_PLACEMENT_ATTEMPTS:
                     ds = self.add_shape(dss)
                     if not any(ds.intersects(s) for s in existing_shapes):
                         existing_shapes.append(ds)
@@ -419,45 +185,45 @@ class MiniShapeWorld:
                     )
 
             # Create image and draw shapes
-            img = IMG()
+            img = image.IMG()
             img.draw_shapes(existing_shapes)
             imgs[w_idx] = img.array()
             labels[w_idx] = label
-        return imgs, labels, config, i
+        return imgs, labels, cfg, i
 
-    def invalidate_spatial(self, config):
+    def invalidate_spatial(self, cfg):
         # Invalidate by randomly choosing one property to change:
         ((shape_1_color, shape_1_shape),
-         (shape_2_color, shape_2_shape)), relation, relation_dir = config
+         (shape_2_color, shape_2_shape)), relation, relation_dir = cfg
         properties = []
         if shape_1_color is not None:
-            properties.append(ConfigProps.SHAPE_1_COLOR)
+            properties.append(config.ConfigProps.SHAPE_1_COLOR)
         if shape_1_shape is not None:
-            properties.append(ConfigProps.SHAPE_1_SHAPE)
+            properties.append(config.ConfigProps.SHAPE_1_SHAPE)
         if shape_2_color is not None:
-            properties.append(ConfigProps.SHAPE_2_COLOR)
+            properties.append(config.ConfigProps.SHAPE_2_COLOR)
         if shape_2_shape is not None:
-            properties.append(ConfigProps.SHAPE_2_SHAPE)
-        properties.append(ConfigProps.RELATION_DIR)
+            properties.append(config.ConfigProps.SHAPE_2_SHAPE)
+        properties.append(config.ConfigProps.RELATION_DIR)
         # Randomly select property to invalidate
         # TODO: Support for invalidating multiple properties
         invalid_prop = random.choice(properties)
 
-        if invalid_prop == ConfigProps.SHAPE_1_COLOR:
+        if invalid_prop == config.ConfigProps.SHAPE_1_COLOR:
             return ((self.new_color(shape_1_color), shape_1_shape),
                     (shape_2_color, shape_2_shape)), relation, relation_dir
-        elif invalid_prop == ConfigProps.SHAPE_1_SHAPE:
+        elif invalid_prop == config.ConfigProps.SHAPE_1_SHAPE:
             return ((shape_1_color, self.new_shape(shape_1_shape)),
                     (shape_2_color, shape_2_shape)), relation, relation_dir
-        elif invalid_prop == ConfigProps.SHAPE_2_COLOR:
+        elif invalid_prop == config.ConfigProps.SHAPE_2_COLOR:
             return ((shape_1_color, shape_1_shape),
                     (self.new_color(shape_2_color),
                      shape_2_shape)), relation, relation_dir
-        elif invalid_prop == ConfigProps.SHAPE_2_SHAPE:
+        elif invalid_prop == config.ConfigProps.SHAPE_2_SHAPE:
             return ((shape_1_color, shape_1_shape),
                     (shape_2_color,
                      self.new_shape(shape_2_shape))), relation, relation_dir
-        elif invalid_prop == ConfigProps.RELATION_DIR:
+        elif invalid_prop == config.ConfigProps.RELATION_DIR:
             return ((shape_1_color, shape_1_shape),
                     (shape_2_color, shape_2_shape)), relation, 1 - relation_dir
         else:
@@ -468,7 +234,7 @@ class MiniShapeWorld:
         n_images, correct, i = mp_args
         imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
-        config = self.random_config_single()
+        cfg = self.random_config_single()
         if self.data_type == 'concept':
             n_target = 2
             n_distract = 2
@@ -486,27 +252,28 @@ class MiniShapeWorld:
                 n_distract -= 1
             else:
                 label = (random.random() < correct)
-            new_config = config if label else self.invalidate_single(config)
+            new_cfg = cfg if label else self.invalidate_single(cfg)
 
-            color_, shape_ = new_config
+            color_, shape_ = new_cfg
             if shape_ is None:
                 shape_ = self.random_shape()
             if color_ is None:
                 color_ = self.random_color()
-            s = SHAPE_IMPLS[shape_](color=color_)
+            s = shape.SHAPE_IMPLS[shape_](color_=color_)
 
             # Create image and draw shape
-            img = IMG()
+            img = image.IMG()
             img.draw_shapes([s])
             imgs[w_idx] = img.array()
             labels[w_idx] = label
-        return imgs, labels, config, i
+        return imgs, labels, cfg, i
 
-    def invalidate_single(self, config):
-        color_, shape_ = config
+    def invalidate_single(self, cfg):
+        color_, shape_ = cfg
         if shape_ is not None and color_ is not None:
             # Sample random part to invalidate
-            # Here, we can invalidate shape, or invalidate color, OR invalidate both
+            # Here, we can invalidate shape, or invalidate color, OR
+            # invalidate both
             part_to_invalidate = random.randint(3)
             if part_to_invalidate == 0:
                 return (self.new_color(color_), shape_)
@@ -527,24 +294,24 @@ class MiniShapeWorld:
 
     def random_shape(self, unrestricted=False):
         if unrestricted:
-            return random.choice(SHAPES)
+            return random.choice(shape.SHAPES)
         else:
             return random.choice(self.shapes)
 
     def random_color(self, unrestricted=False):
         if unrestricted:
-            return random.choice(COLORS)
+            return random.choice(color.COLORS)
         else:
             return random.choice(self.colors)
 
     def random_shape_from_spec(self, spec):
         color_ = None
         shape_ = None
-        if spec == ShapeSpec.SHAPE:
+        if spec == config.ShapeSpec.SHAPE:
             shape_ = self.random_shape()
-        elif spec == ShapeSpec.COLOR:
+        elif spec == config.ShapeSpec.COLOR:
             color_ = self.random_color()
-        elif spec == ShapeSpec.BOTH:
+        elif spec == config.ShapeSpec.BOTH:
             shape_ = self.random_shape()
             color_ = self.random_color()
         else:
@@ -552,9 +319,9 @@ class MiniShapeWorld:
         return (color_, shape_)
 
     def random_config_single(self):
-        shape_spec = ShapeSpec(random.randint(3))
+        shape_spec = config.ShapeSpec(random.randint(3))
         shape_ = self.random_shape_from_spec(shape_spec)
-        return SingleConfig(*shape_)
+        return config.SingleConfig(*shape_)
 
     def sample_distractors(self, existing_shapes=()):
         if isinstance(self.n_distractors, tuple):
@@ -579,15 +346,15 @@ class MiniShapeWorld:
         # 0 -> only shape specified
         # 1 -> only color specified
         # 2 -> only both specified
-        shape_1_spec = ShapeSpec(random.randint(3))
-        shape_2_spec = ShapeSpec(random.randint(3))
+        shape_1_spec = config.ShapeSpec(random.randint(3))
+        shape_2_spec = config.ShapeSpec(random.randint(3))
         shape_1 = self.random_shape_from_spec(shape_1_spec)
         shape_2 = self.random_shape_from_spec(shape_2_spec)
         if shape_1 == shape_2:
             return self.random_config_spatial()
         relation = random.randint(2)
         relation_dir = random.randint(2)
-        return SpatialConfig([shape_1, shape_2], relation, relation_dir)
+        return config.SpatialConfig([shape_1, shape_2], relation, relation_dir)
 
     def add_shape_from_spec(self,
                             spec,
@@ -595,16 +362,16 @@ class MiniShapeWorld:
                             relation_dir,
                             shapes=None,
                             attempt=1):
-        if attempt > MAX_PLACEMENT_ATTEMPTS:
+        if attempt > c.MAX_PLACEMENT_ATTEMPTS:
             return None
         color_, shape_ = spec
         if shape_ is None:
             shape_ = self.random_shape()
         if color_ is None:
             color_ = self.random_color()
-        s = SHAPE_IMPLS[shape_](relation=relation,
-                                relation_dir=relation_dir,
-                                color=color_)
+        s = shape.SHAPE_IMPLS[shape_](relation=relation,
+                                      relation_dir=relation_dir,
+                                      color_=color_)
         if shapes is not None:
             for oth in shapes:
                 if s.intersects(oth):
@@ -627,22 +394,22 @@ class MiniShapeWorld:
         if color_ is None:
             color_ = self.random_color()
         if relation == 0:
-            new_y = rand_pos()
+            new_y = shape.rand_pos()
             if relation_dir == 0:
                 # Shape must be LEFT of oth shape
-                new_x = random.randint(X_MIN, oth_shape.x - BUFFER)
+                new_x = random.randint(c.X_MIN, oth_shape.x - c.BUFFER)
             else:
                 # Shape RIGHT of oth shape
-                new_x = random.randint(oth_shape.x + BUFFER, X_MAX)
+                new_x = random.randint(oth_shape.x + c.BUFFER, c.X_MAX)
         else:
-            new_x = rand_pos()
+            new_x = shape.rand_pos()
             if relation_dir == 0:
                 # BELOW (remember y coords reversed)
-                new_y = random.randint(oth_shape.y + BUFFER, X_MAX)
+                new_y = random.randint(oth_shape.y + c.BUFFER, c.X_MAX)
             else:
                 # ABOVE
-                new_y = random.randint(X_MIN, oth_shape.y - BUFFER)
-        return SHAPE_IMPLS[shape_](x=new_x, y=new_y, color=color_)
+                new_y = random.randint(c.X_MIN, oth_shape.y - c.BUFFER)
+        return shape.SHAPE_IMPLS[shape_](x=new_x, y=new_y, color_=color_)
 
     def add_shape(self, spec):
         """
@@ -653,9 +420,9 @@ class MiniShapeWorld:
             shape_ = self.random_shape()
         if color_ is None:
             color_ = self.random_color()
-        x = rand_pos()
-        y = rand_pos()
-        return SHAPE_IMPLS[shape_](x=x, y=y, color=color_)
+        x = shape.rand_pos()
+        y = shape.rand_pos()
+        return shape.SHAPE_IMPLS[shape_](x=x, y=y, color_=color_)
 
     def new_color(self, existing_color):
         if len(self.colors) == 1 and self.colors[0] == existing_color:
@@ -674,17 +441,17 @@ class MiniShapeWorld:
         return new_s
 
 
-def fmt_config(config):
-    if isinstance(config, SingleConfig):
-        return _fmt_config_single(config)
-    elif isinstance(config, SpatialConfig):
-        return _fmt_config_spatial(config)
+def fmt_config(cfg):
+    if isinstance(cfg, config.SingleConfig):
+        return _fmt_config_single(cfg)
+    elif isinstance(cfg, config.SpatialConfig):
+        return _fmt_config_spatial(cfg)
     else:
-        raise NotImplementedError(type(config))
+        raise NotImplementedError(type(cfg))
 
 
-def _fmt_config_single(config):
-    color_, shape_ = config
+def _fmt_config_single(cfg):
+    color_, shape_ = cfg
     shape_txt = 'shape'
     color_txt = ''
     if shape_ is not None:
@@ -694,8 +461,8 @@ def _fmt_config_single(config):
     return '{}{}'.format(color_txt, shape_txt)
 
 
-def _fmt_config_spatial(config):
-    (s1, s2), relation, relation_dir = config
+def _fmt_config_spatial(cfg):
+    (s1, s2), relation, relation_dir = cfg
     if relation == 0:
         if relation_dir == 0:
             rel_txt = 'left'
@@ -724,66 +491,6 @@ def _fmt_config_spatial(config):
         s2_1_txt = s2[1]
     return '{} {} {} {} {}'.format(s1_0_txt, s1_1_txt, rel_txt, s2_0_txt,
                                    s2_1_txt)
-
-
-HTML_TEMPLATE = '''
-<!DOCTYPE html>
-<html>
-<head>
-<title>Shapeworld</title>
-<style>
-body {{ font-family: sans-serif; }}
-img {{ padding: 10px; }}
-img.yes {{ background-color: green; }}
-img.no {{ background-color: red; }}
-div.example {{ background-color: #eeeeee; }}
-</style>
-</head>
-<body>
-{}
-</body>
-</html>
-'''
-
-
-def make_example_html(example_i, labels, lang):
-    return '<div class="example"><h1>{}</h1><p>{}</p></div>'.format(
-        lang, make_image_html(example_i, labels))
-
-
-def make_image_html(example_i, labels):
-    text_labels = ['no', 'yes']
-    if len(labels.shape) > 0:
-        return ''.join('<img src="{}_{}.png" class="{}">'.format(
-            example_i, image_i, text_labels[label])
-                       for image_i, label in enumerate(labels))
-    else:
-        return '<img src="{}.png">'.format(example_i)
-
-
-def visualize(img_dir, data, n=100):
-    # Save to test directory
-    data = {k: v[:n] for k, v in data.items()}
-    data_arr = list(zip(data['imgs'], data['labels'], data['langs']))
-    for example_i, (example, labels, lang) in enumerate(data_arr):
-        if len(example.shape) == 3:
-            # Caption dataset
-            Image.fromarray(example).save(
-                os.path.join(img_dir, '{}.png'.format(example_i)))
-        else:
-            for image_i, image in enumerate(example):
-                Image.fromarray(image).save(
-                    os.path.join(img_dir,
-                                 '{}_{}.png'.format(example_i, image_i)))
-
-    example_html = [
-        make_example_html(example_i, labels, lang)
-        for example_i, (example, labels, lang) in enumerate(data_arr)
-    ]
-    index_fname = os.path.join(img_dir, 'index.html')
-    with open(index_fname, 'w') as f:
-        # Sorry for this code
-        f.write(HTML_TEMPLATE.format(''.join(example_html)))
 
 
 if __name__ == '__main__':
@@ -817,7 +524,8 @@ if __name__ == '__main__':
         default=[2, 3],
         nargs='*',
         type=int,
-        help='Number of distractor shapes (for spatial only); either one int or (min, max)'
+        help='Number of distractor shapes (for spatial only); '
+             'either one int or (min, max)'
     )
     parser.add_argument('--img_type',
                         choices=['single', 'spatial'],
@@ -827,7 +535,8 @@ if __name__ == '__main__':
         '--vis_dir',
         default=None,
         type=str,
-        help='If specified, save sample visualization of data (100 images) to this folder'
+        help='If specified, save sample visualization of data '
+             '(100 images) to this folder'
     )
     parser.add_argument('--n_vis',
                         default=100,
@@ -859,4 +568,4 @@ if __name__ == '__main__':
 
     if args.vis_dir is not None:
         os.makedirs(args.vis_dir, exist_ok=True)
-        visualize(args.vis_dir, data, n=args.n_vis)
+        vis.visualize(args.vis_dir, data, n=args.n_vis)
