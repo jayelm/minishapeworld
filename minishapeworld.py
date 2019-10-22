@@ -2,7 +2,7 @@
 Generate shapeworld reference games
 """
 
-from shapely.geometry import Point, box
+from shapely.geometry import Point, box, Polygon
 from shapely import affinity
 import numpy as np
 from numpy import random
@@ -23,7 +23,7 @@ SIZE_MIN, SIZE_MAX = (2, 8)
 
 MAX_UINT8 = np.float32(255)
 
-SHAPES = ['circle', 'square', 'rectangle', 'ellipse']
+SHAPES = ['circle', 'square', 'rectangle', 'ellipse', 'triangle']
 COLORS = ['red', 'blue', 'green', 'yellow', 'white', 'gray']
 BRUSHES = {c: aggdraw.Brush(c) for c in COLORS}
 PENS = {c: aggdraw.Pen(c) for c in COLORS}
@@ -211,12 +211,39 @@ class Square(Rectangle):
                 np.int).tolist()
 
 
+class Triangle(Shape):
+    """
+    Equilateral triangles
+    """
+
+    def init_shape(self):
+        self.size = rand_size_2()
+        # X and Y are the center of the shape and size is the length of one
+        # side. Assume one point lies directly above the center. Then:
+        # https://math.stackexchange.com/questions/1344690/is-it-possible-to-find-the-vertices-of-an-equilateral-triangle-given-its-center
+        shape = Polygon([
+            (self.x, self.y + np.sqrt(3) * self.size / 3),
+            (self.x - self.size / 2, self.y - np.sqrt(3) * self.size / 6),
+            (self.x + self.size / 2, self.y - np.sqrt(3) * self.size / 6),
+        ])
+        # Rotation
+        shape = affinity.rotate(shape, random.randint(90))
+        self.shape = shape
+
+        self.coords = np.round(
+            np.array(self.shape.exterior.coords)[:-1].flatten()).astype(np.int).tolist()
+
+    def draw(self, image):
+        image.draw.polygon(self.coords, BRUSHES[self.color], PENS[self.color])
+
+
 SHAPE_IMPLS = {
     'circle': Circle,
     'ellipse': Ellipse,
     'square': Square,
     'rectangle': Rectangle,
-    # TODO: Triangle, semicircle
+    'triangle': Triangle
+    # TODO: semicircle
 }
 
 
@@ -261,8 +288,6 @@ class MiniShapeWorld:
         self.shapes = shapes
 
         self.n_distractors = n_distractors
-        if (isinstance(self.n_distractors, tuple) or self.n_distractors > 0) and self.img_type != 'spatial':
-            raise ValueError("Distractors for non-spatial images not supported")
         self.unique_distractors = unique_distractors
         self.unrestricted_distractors = unrestricted_distractors
 
@@ -520,7 +545,7 @@ class MiniShapeWorld:
 
     def sample_distractors(self, existing_shapes=()):
         if isinstance(self.n_distractors, tuple):
-            n_dist = random.randint(self.n_distractors[0], self.n_distractors[1])
+            n_dist = random.randint(self.n_distractors[0], self.n_distractors[1] + 1)  # Exclusive range
         else:
             n_dist = self.n_distractors
 
@@ -761,7 +786,7 @@ if __name__ == '__main__':
         '--data_type', choices=['concept', 'reference', 'caption'], default='concept',
         help='What kind of data to generate')
     parser.add_argument(
-        '--n_distractors', default=0, nargs='*', type=int,
+        '--n_distractors', default=[2, 3], nargs='*', type=int,
         help='Number of distractor shapes (for spatial only); either one int or (min, max)')
     parser.add_argument(
         '--img_type', choices=['single', 'spatial'], default='spatial',
@@ -781,13 +806,12 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if isinstance(args.n_distractors, list):
-        if len(args.n_distractors) == 1:
-            args.n_distractors = args.n_distractors[0]
-        elif len(args.n_distractors) == 2:
-            args.n_distractors = tuple(args.n_distractors)
-        else:
-            parser.error("--n_distractors must be either 1 int or 2 (min, max)")
+    if len(args.n_distractors) == 1:
+        args.n_distractors = args.n_distractors[0]
+    elif len(args.n_distractors) == 2:
+        args.n_distractors = tuple(args.n_distractors)
+    else:
+        parser.error("--n_distractors must be either 1 int or 2 (min, max)")
 
     msw = MiniShapeWorld(data_type=args.data_type, img_type=args.img_type,
                          n_distractors=args.n_distractors)
