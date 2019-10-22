@@ -30,6 +30,7 @@ PENS = {c: aggdraw.Pen(c) for c in COLORS}
 
 
 MAX_PLACEMENT_ATTEMPTS = 5
+MAX_DISTRACTOR_PLACEMENT_ATTEMPTS = 100
 
 
 class ShapeSpec(Enum):
@@ -161,8 +162,6 @@ class Ellipse(Shape):
 
 class Circle(Ellipse):
     def init_shape(self):
-        if self.color not in ['blue', 'red']:
-            import ipdb; ipdb.set_trace()
         self.r = rand_size()
         self.shape = Point(self.x, self.y).buffer(self.r)
         self.coords = [int(x) for x in self.shape.bounds]
@@ -221,12 +220,27 @@ SHAPE_IMPLS = {
 }
 
 
-SpatialConfig = namedtuple('SpatialConfig', ['shapes', 'distractors', 'relation', 'dir'])
+SpatialConfig = namedtuple('SpatialConfig', ['shapes', 'relation', 'dir'])
 SingleConfig = namedtuple('SingleConfig', ['shape', 'color'])
 
 
 class MiniShapeWorld:
-    def __init__(self, data_type='concept', img_type='spatial', colors=None, shapes=None):
+    def __init__(self, data_type='concept', img_type='spatial', colors=None, shapes=None,
+                 n_distractors=0, unique_distractors=True, unrestricted_distractors=True):
+        """
+
+        :param data_type: one of 'concept', 'reference' or 'caption'
+        :param img_type: what kind of concept is represented in each image
+        :param colors: optional subset of colors to sample from
+        :param shapes: optional subset of colors to sample from
+        :param n_distractors: number of distractor shapes in each image
+            unrelated to concept (> 1 only valid for spatial). Either a single
+            int for fixed number, or a tuple range (min, max)
+        :param unique_distractors: enforce that distractors have different
+            colors and shapes from concept shapes
+        :param unrestricted_distractors: sample distractor colors/shapes freely
+            from colors
+        """
         if data_type not in ['concept', 'reference', 'caption']:
             raise NotImplementedError("data_type = {}".format(data_type))
 
@@ -245,6 +259,12 @@ class MiniShapeWorld:
             shapes = SHAPES
         self.colors = colors
         self.shapes = shapes
+
+        self.n_distractors = n_distractors
+        if (isinstance(self.n_distractors, tuple) or self.n_distractors > 0) and self.img_type != 'spatial':
+            raise ValueError("Distractors for non-spatial images not supported")
+        self.unique_distractors = unique_distractors
+        self.unrestricted_distractors = unrestricted_distractors
 
     def generate(self, n, n_images=10, correct=0.5, float_type=False, pool=None,
                  workers=0, verbose=False):
@@ -318,7 +338,7 @@ class MiniShapeWorld:
             n_target = 1
             n_distract = n_images  # Never run out of distractors
         idx_rand = list(range(n_images))
-        # random.shuffle(idx_rand)
+
         for w_idx in idx_rand:
             if n_target > 0:
                 label = 1
@@ -329,22 +349,36 @@ class MiniShapeWorld:
             else:
                 label = (random.random() < correct)
             new_config = config if label else self.invalidate_spatial(config)
-            (ss1, ss2), extra_shape_specs, relation, relation_dir = new_config
+            (ss1, ss2), relation, relation_dir = new_config
             s2 = self.add_shape_from_spec(ss2, relation, relation_dir)
 
+            # Place second shape
             attempts = 0
             while attempts < MAX_PLACEMENT_ATTEMPTS:
-                # TODO: Support extra shapes
                 s1 = self.add_shape_rel(ss1, s2, relation, relation_dir)
                 if not s2.intersects(s1):
                     break
             else:
                 # Failed
-                raise RuntimeError
+                raise RuntimeError("Could not place shape onto image without intersection")
+
+            # Place distractor shapes
+            existing_shapes = [s1, s2]
+            distractors = self.sample_distractors(existing_shapes=existing_shapes)
+            for dss in distractors:
+                attempts = 0
+                while attempts < MAX_DISTRACTOR_PLACEMENT_ATTEMPTS:
+                    ds = self.add_shape(dss)
+                    if not any(ds.intersects(s) for s in existing_shapes):
+                        existing_shapes.append(ds)
+                        break
+                else:
+                    # Failed
+                    raise RuntimeError("Could not place distractor onto image without intersection")
 
             # Create image and draw shapes
             img = I()
-            img.draw_shapes([s1, s2])
+            img.draw_shapes(existing_shapes)
             imgs[w_idx] = img.array()
             labels[w_idx] = label
         return imgs, labels, config, i
@@ -353,7 +387,7 @@ class MiniShapeWorld:
         # Invalidate by randomly choosing one property to change:
         ((shape_1_color, shape_1_shape),
          (shape_2_color,
-          shape_2_shape)), extra_shape_specs, relation, relation_dir = config
+          shape_2_shape)), relation, relation_dir = config
         properties = []
         if shape_1_color is not None:
             properties.append(ConfigProps.SHAPE_1_COLOR)
@@ -371,23 +405,23 @@ class MiniShapeWorld:
         if invalid_prop == ConfigProps.SHAPE_1_COLOR:
             return ((self.new_color(shape_1_color), shape_1_shape),
                     (shape_2_color,
-                     shape_2_shape)), extra_shape_specs, relation, relation_dir
+                     shape_2_shape)), relation, relation_dir
         elif invalid_prop == ConfigProps.SHAPE_1_SHAPE:
             return ((shape_1_color, self.new_shape(shape_1_shape)),
                     (shape_2_color,
-                     shape_2_shape)), extra_shape_specs, relation, relation_dir
+                     shape_2_shape)), relation, relation_dir
         elif invalid_prop == ConfigProps.SHAPE_2_COLOR:
             return ((shape_1_color, shape_1_shape),
                     (self.new_color(shape_2_color),
-                     shape_2_shape)), extra_shape_specs, relation, relation_dir
+                     shape_2_shape)), relation, relation_dir
         elif invalid_prop == ConfigProps.SHAPE_2_SHAPE:
             return ((shape_1_color, shape_1_shape), (shape_2_color,
                                                      self.new_shape(shape_2_shape))
-                    ), extra_shape_specs, relation, relation_dir
+                    ), relation, relation_dir
         elif invalid_prop == ConfigProps.RELATION_DIR:
             return ((shape_1_color, shape_1_shape),
                     (shape_2_color,
-                     shape_2_shape)), extra_shape_specs, relation, 1 - relation_dir
+                     shape_2_shape)), relation, 1 - relation_dir
         else:
             raise RuntimeError
 
@@ -453,11 +487,17 @@ class MiniShapeWorld:
         else:
             raise RuntimeError
 
-    def random_shape(self):
-        return random.choice(self.shapes)
+    def random_shape(self, unrestricted=False):
+        if unrestricted:
+            return random.choice(SHAPES)
+        else:
+            return random.choice(self.shapes)
 
-    def random_color(self):
-        return random.choice(self.colors)
+    def random_color(self, unrestricted=False):
+        if unrestricted:
+            return random.choice(COLORS)
+        else:
+            return random.choice(self.colors)
 
     def random_shape_from_spec(self, spec):
         color = None
@@ -478,6 +518,21 @@ class MiniShapeWorld:
         shape = self.random_shape_from_spec(shape_spec)
         return SingleConfig(*shape)
 
+    def sample_distractors(self, existing_shapes=()):
+        if isinstance(self.n_distractors, tuple):
+            n_dist = random.randint(self.n_distractors[0], self.n_distractors[1])
+        else:
+            n_dist = self.n_distractors
+
+        distractors = []
+        for _ in range(n_dist):
+            d = None
+            while d is None or d in existing_shapes:
+                d = (self.random_color(unrestricted=self.unrestricted_distractors),
+                     self.random_shape(unrestricted=self.unrestricted_distractors))
+            distractors.append(d)
+        return distractors
+
     def random_config_spatial(self):
         # 0 -> only shape specified
         # 1 -> only color specified
@@ -490,7 +545,7 @@ class MiniShapeWorld:
             return self.random_config_spatial()
         relation = random.randint(2)
         relation_dir = random.randint(2)
-        return SpatialConfig([shape_1, shape_2], None, relation, relation_dir)
+        return SpatialConfig([shape_1, shape_2], relation, relation_dir)
 
     def add_shape_from_spec(self, spec,
                             relation,
@@ -546,6 +601,19 @@ class MiniShapeWorld:
                 new_y = random.randint(X_MIN, oth_shape.y - BUFFER)
         return SHAPE_IMPLS[shape_](x=new_x, y=new_y, color=color)
 
+    def add_shape(self, spec):
+        """
+        Add shape according to spec
+        """
+        color, shape_ = spec
+        if shape_ is None:
+            shape_ = self.random_shape()
+        if color is None:
+            color = self.random_color()
+        x = rand_pos()
+        y = rand_pos()
+        return SHAPE_IMPLS[shape_](x=x, y=y, color=color)
+
     def new_color(self, existing_color):
         if len(self.colors) == 1 and self.colors[0] == existing_color:
             raise RuntimeError("No additional colors to generate")
@@ -584,7 +652,7 @@ def _fmt_config_single(config):
 
 
 def _fmt_config_spatial(config):
-    (s1, s2), extra, relation, relation_dir = config
+    (s1, s2), relation, relation_dir = config
     if relation == 0:
         if relation_dir == 0:
             rel_txt = 'left'
@@ -693,6 +761,9 @@ if __name__ == '__main__':
         '--data_type', choices=['concept', 'reference', 'caption'], default='concept',
         help='What kind of data to generate')
     parser.add_argument(
+        '--n_distractors', default=0, nargs='*', type=int,
+        help='Number of distractor shapes (for spatial only); either one int or (min, max)')
+    parser.add_argument(
         '--img_type', choices=['single', 'spatial'], default='spatial',
         help='What kind of images to generate')
     parser.add_argument(
@@ -710,8 +781,16 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    if isinstance(args.n_distractors, list):
+        if len(args.n_distractors) == 1:
+            args.n_distractors = args.n_distractors[0]
+        elif len(args.n_distractors) == 2:
+            args.n_distractors = tuple(args.n_distractors)
+        else:
+            parser.error("--n_distractors must be either 1 int or 2 (min, max)")
+
     msw = MiniShapeWorld(data_type=args.data_type, img_type=args.img_type,
-                         colors=['blue', 'red'], shapes=['circle', 'ellipse'])
+                         n_distractors=args.n_distractors)
     data = msw.generate(args.n_examples, n_images=args.n_images, correct=args.correct, workers=args.workers, verbose=True)
 
     np.savez_compressed(args.save, **data)
