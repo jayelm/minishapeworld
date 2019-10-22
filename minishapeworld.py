@@ -50,14 +50,14 @@ class ConfigProps(Enum):
 SHAPE_SPECS = list(ShapeSpec)
 
 
-class I:
+class IMG:
     def __init__(self):
         self.image = Image.new('RGB', (DIM, DIM))
         self.draw = aggdraw.Draw(self.image)
 
     def draw_shapes(self, shapes, flush=True):
-        for shape in shapes:
-            shape.draw(self)
+        for shape_ in shapes:
+            shape_.draw(self)
         if flush:
             self.draw.flush()
 
@@ -151,10 +151,10 @@ class Ellipse(Shape):
             # Switch dx, dy
             self.dx, self.dy = self.dy, self.dx
 
-        shape = Point(self.x, self.y).buffer(1)
-        shape = affinity.scale(shape, self.dx, self.dy)
-        shape = affinity.rotate(shape, random.randint(360))
-        self.shape = shape
+        shape_ = Point(self.x, self.y).buffer(1)
+        shape_ = affinity.scale(shape_, self.dx, self.dy)
+        shape_ = affinity.rotate(shape_, random.randint(360))
+        self.shape = shape_
 
         self.coords = np.round(np.array(self.shape.boundary).astype(np.int))
         self.coords = np.unique(self.coords, axis=0).flatten()
@@ -183,10 +183,10 @@ class Rectangle(Shape):
             # Switch dx, dy
             self.dx, self.dy = self.dy, self.dx
 
-        shape = box(self.x, self.y, self.x + self.dx, self.y + self.dy)
+        shape_ = box(self.x, self.y, self.x + self.dx, self.y + self.dy)
         # Rotation
-        shape = affinity.rotate(shape, random.randint(90))
-        self.shape = shape
+        shape_ = affinity.rotate(shape_, random.randint(90))
+        self.shape = shape_
 
         # Get coords
         self.coords = np.round(
@@ -200,10 +200,10 @@ class Rectangle(Shape):
 class Square(Rectangle):
     def init_shape(self):
         self.size = rand_size_2()
-        shape = box(self.x, self.y, self.x + self.size, self.y + self.size)
+        shape_ = box(self.x, self.y, self.x + self.size, self.y + self.size)
         # Rotation
-        shape = affinity.rotate(shape, random.randint(90))
-        self.shape = shape
+        shape_ = affinity.rotate(shape_, random.randint(90))
+        self.shape = shape_
 
         # Get coords
         self.coords = np.round(
@@ -221,14 +221,14 @@ class Triangle(Shape):
         # X and Y are the center of the shape and size is the length of one
         # side. Assume one point lies directly above the center. Then:
         # https://math.stackexchange.com/questions/1344690/is-it-possible-to-find-the-vertices-of-an-equilateral-triangle-given-its-center
-        shape = Polygon([
+        shape_ = Polygon([
             (self.x, self.y + np.sqrt(3) * self.size / 3),
             (self.x - self.size / 2, self.y - np.sqrt(3) * self.size / 6),
             (self.x + self.size / 2, self.y - np.sqrt(3) * self.size / 6),
         ])
         # Rotation
-        shape = affinity.rotate(shape, random.randint(90))
-        self.shape = shape
+        shape_ = affinity.rotate(shape_, random.randint(90))
+        self.shape = shape_
 
         self.coords = np.round(
             np.array(self.shape.exterior.coords)[:-1].flatten()).astype(np.int).tolist()
@@ -402,7 +402,7 @@ class MiniShapeWorld:
                     raise RuntimeError("Could not place distractor onto image without intersection")
 
             # Create image and draw shapes
-            img = I()
+            img = IMG()
             img.draw_shapes(existing_shapes)
             imgs[w_idx] = img.array()
             labels[w_idx] = label
@@ -480,11 +480,11 @@ class MiniShapeWorld:
                 shape_ = self.random_shape()
             if color is None:
                 color = self.random_color()
-            shape = SHAPE_IMPLS[shape_](color=color)
+            s = SHAPE_IMPLS[shape_](color=color)
 
             # Create image and draw shape
-            img = I()
-            img.draw_shapes([shape])
+            img = IMG()
+            img.draw_shapes([s])
             imgs[w_idx] = img.array()
             labels[w_idx] = label
         return imgs, labels, config, i
@@ -526,22 +526,22 @@ class MiniShapeWorld:
 
     def random_shape_from_spec(self, spec):
         color = None
-        shape = None
+        shape_ = None
         if spec == ShapeSpec.SHAPE:
-            shape = self.random_shape()
+            shape_ = self.random_shape()
         elif spec == ShapeSpec.COLOR:
             color = self.random_color()
         elif spec == ShapeSpec.BOTH:
-            shape = self.random_shape()
+            shape_ = self.random_shape()
             color = self.random_color()
         else:
             raise ValueError("Unknown spec {}".format(spec))
-        return (color, shape)
+        return (color, shape_)
 
     def random_config_single(self):
         shape_spec = ShapeSpec(random.randint(3))
-        shape = self.random_shape_from_spec(shape_spec)
-        return SingleConfig(*shape)
+        shape_ = self.random_shape_from_spec(shape_spec)
+        return SingleConfig(*shape_)
 
     def sample_distractors(self, existing_shapes=()):
         if isinstance(self.n_distractors, tuple):
@@ -584,20 +584,20 @@ class MiniShapeWorld:
             shape_ = self.random_shape()
         if color is None:
             color = self.random_color()
-        shape = SHAPE_IMPLS[shape_](
+        s = SHAPE_IMPLS[shape_](
             relation=relation, relation_dir=relation_dir, color=color)
         if shapes is not None:
             for oth in shapes:
-                if shape.intersects(oth):
+                if s.intersects(oth):
                     return self.add_shape_from_spec(
                         spec,
                         relation,
                         relation_dir,
                         shapes=shapes,
                         attempt=attempt + 1)
-            shapes.append(shape)
-            return shape
-        return shape
+            shapes.append(s)
+            return s
+        return s
 
     def add_shape_rel(self, spec, oth_shape, relation, relation_dir):
         """
@@ -666,11 +666,11 @@ def fmt_config(config):
 
 
 def _fmt_config_single(config):
-    color, shape = config
+    color, shape_ = config
     shape_txt = 'shape'
     color_txt = ''
-    if shape is not None:
-        shape_txt = shape
+    if shape_ is not None:
+        shape_txt = shape_
     if color is not None:
         color_txt = color + ' '
     return '{}{}'.format(color_txt, shape_txt)
@@ -726,6 +726,7 @@ div.example {{ background-color: #eeeeee; }}
 </body>
 </html>
 '''
+
 
 def make_example_html(example_i, labels, lang):
     return '<div class="example"><h1>{}</h1><p>{}</p></div>'.format(
