@@ -111,7 +111,8 @@ class MiniShapeWorld:
         if float_type:
             all_imgs = np.divide(all_imgs, 255.0)
             all_labels = all_labels.astype(np.float32)
-        langs = np.array([lang.fmt_config(c) for c in configs], dtype=np.unicode)
+        langs = np.array([lang.fmt_config(c) for c in configs],
+                         dtype=np.unicode)
 
         if self.data_type == 'caption':
             # Squeeze out the images per example dim
@@ -165,15 +166,33 @@ class MiniShapeWorld:
 
             # Place distractor shapes
             existing_shapes = [s1, s2]
-            distractors = self.sample_distractors(
-                existing_shapes=existing_shapes)
-            for dss in distractors:
+            assert not new_cfg.does_not_validate([s1], s2)
+            assert not new_cfg.does_not_validate([s2], s1)
+            assert not new_cfg.does_not_validate([s1, s2], s1)
+            assert not new_cfg.does_not_validate([s1, s2], s2)
+            n_dist = self.sample_n_distractor()
+            for _ in range(n_dist):
                 attempts = 0
                 while attempts < c.MAX_DISTRACTOR_PLACEMENT_ATTEMPTS:
+                    dss = self.sample_distractor(existing_shapes=existing_shapes)
                     ds = self.add_shape(dss)
+                    # If negative example, ensure distractor shape does not
+                    # make the true config valid
+                    # No intersections
                     if not any(ds.intersects(s) for s in existing_shapes):
-                        existing_shapes.append(ds)
-                        break
+                        if label:
+                            existing_shapes.append(ds)
+                            break
+                        else:
+                            # If this is a *negative* example, we should not have
+                            # the relation expressed by the original config
+                            if cfg.does_not_validate(existing_shapes, ds):
+                                existing_shapes.append(ds)
+                                break
+                            else:
+                                #  print(f"Adding new shape {ds} to existing shapes {existing_shapes} validates the original config {lang.fmt_config(cfg)} (attempt {attempts})")
+                                assert True
+                    attempts += 1
                 else:
                     # Failed
                     raise RuntimeError("Could not place distractor onto "
@@ -205,24 +224,25 @@ class MiniShapeWorld:
         invalid_prop = random.choice(properties)
 
         if invalid_prop == config.ConfigProps.SHAPE_1_COLOR:
-            return ((self.new_color(shape_1_color), shape_1_shape),
-                    (shape_2_color, shape_2_shape)), relation, relation_dir
+            inv_cfg = ((self.new_color(shape_1_color), shape_1_shape),
+                       (shape_2_color, shape_2_shape)), relation, relation_dir
         elif invalid_prop == config.ConfigProps.SHAPE_1_SHAPE:
-            return ((shape_1_color, self.new_shape(shape_1_shape)),
-                    (shape_2_color, shape_2_shape)), relation, relation_dir
+            inv_cfg = ((shape_1_color, self.new_shape(shape_1_shape)),
+                       (shape_2_color, shape_2_shape)), relation, relation_dir
         elif invalid_prop == config.ConfigProps.SHAPE_2_COLOR:
-            return ((shape_1_color, shape_1_shape),
-                    (self.new_color(shape_2_color),
+            inv_cfg = ((shape_1_color, shape_1_shape),
+                       (self.new_color(shape_2_color),
                      shape_2_shape)), relation, relation_dir
         elif invalid_prop == config.ConfigProps.SHAPE_2_SHAPE:
-            return ((shape_1_color, shape_1_shape),
+            inv_cfg = ((shape_1_color, shape_1_shape),
                     (shape_2_color,
                      self.new_shape(shape_2_shape))), relation, relation_dir
         elif invalid_prop == config.ConfigProps.RELATION_DIR:
-            return ((shape_1_color, shape_1_shape),
+            inv_cfg = ((shape_1_color, shape_1_shape),
                     (shape_2_color, shape_2_shape)), relation, 1 - relation_dir
         else:
             raise RuntimeError
+        return config.SpatialConfig(*inv_cfg)
 
     def generate_single(self, mp_args):
         random.seed()
@@ -318,22 +338,30 @@ class MiniShapeWorld:
         shape_ = self.random_shape_from_spec(shape_spec)
         return config.SingleConfig(*shape_)
 
-    def sample_distractors(self, existing_shapes=()):
+    def sample_n_distractor(self):
         if isinstance(self.n_distractors, tuple):
             n_dist = random.randint(self.n_distractors[0],
                                     self.n_distractors[1] +
                                     1)  # Exclusive range
         else:
             n_dist = self.n_distractors
+        return n_dist
+
+    def sample_distractor(self, existing_shapes=()):
+        d = (self.random_color(
+            unrestricted=self.unrestricted_distractors),
+             self.random_shape(
+                 unrestricted=self.unrestricted_distractors))
+        if d in existing_shapes:
+            return self.sample_distractor(existing_shapes=existing_shapes)
+        return d
+
+    def sample_distractors(self, existing_shapes=()):
+        n_dist = self.sample_n_distractor()
 
         distractors = []
         for _ in range(n_dist):
-            d = None
-            while d is None or d in existing_shapes:
-                d = (self.random_color(
-                    unrestricted=self.unrestricted_distractors),
-                     self.random_shape(
-                         unrestricted=self.unrestricted_distractors))
+            d = self.sample_distractor()
             distractors.append(d)
         return distractors
 

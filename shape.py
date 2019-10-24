@@ -73,6 +73,28 @@ class Shape:
     def intersects(self, oth):
         return self.shape.intersects(oth.shape)
 
+    def left(self, oth):
+        return self.x < oth.x
+
+    def right(self, oth):
+        return self.x > oth.x
+
+    def above(self, oth):
+        return self.y < oth.y
+
+    def below(self, oth):
+        return self.y > oth.y
+
+    @property
+    def name(self):
+        return type(self).__name__.lower()
+
+    def __str__(self):
+        return f"<{self.color} {self.name} at ({self.x}, {self.y})>"
+
+    def __repr__(self):
+        return self.__str__()
+
 
 class Ellipse(Shape):
     def init_shape(self, min_skew=1.5):
