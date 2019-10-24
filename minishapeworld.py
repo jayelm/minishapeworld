@@ -492,6 +492,17 @@ if __name__ == '__main__':
                         type=int,
                         default=10,
                         help='Images per example (concept/reference only)')
+    parser.add_argument('--config_split',
+                        action='store_true',
+                        help='Enforce unique configs across splits')
+    parser.add_argument('--val',
+                        default=0.1,
+                        type=float,
+                        help='What %% of --n_examples belong to val? (if 0 will not create)')
+    parser.add_argument('--test',
+                        default=0.1,
+                        type=float,
+                        help='What %% of --n_examples belong to test? (if 0 will not create)')
     parser.add_argument('--correct',
                         type=float,
                         default=0.5,
@@ -514,20 +525,25 @@ if __name__ == '__main__':
                         choices=['single', 'spatial'],
                         default='spatial',
                         help='What kind of images to generate')
-    parser.add_argument('--vis_dir',
-                        default=None,
-                        type=str,
-                        help='If specified, save sample visualization of data '
-                        'to this folder')
+    parser.add_argument('--vis',
+                        action='store_true',
+                        help='Sample visualization of train data to args.save_dir/vis')
     parser.add_argument('--n_vis',
                         default=100,
                         type=int,
                         help='How many examples to visualize?')
-    parser.add_argument('--save',
-                        default='test.npz',
-                        help='Save dataset to this file')
+    parser.add_argument('--save_dir',
+                        default='test',
+                        help='Save dataset to this directory')
 
     args = parser.parse_args()
+
+    if args.val < 0 or args.val >= 1.0:
+        parser.error("--val must be in [0, 1)")
+    if args.test < 0 or args.test >= 1.0:
+        parser.error("--test must be in [0, 1)")
+    if (args.val + args.test >= 1.0):
+        parser.error(f"--val and test combined cannot be >= 1 (got {args.val + args.test})")
 
     if len(args.n_distractors) == 1:
         args.n_distractors = args.n_distractors[0]
@@ -539,14 +555,40 @@ if __name__ == '__main__':
     msw = MiniShapeWorld(data_type=args.data_type,
                          img_type=args.img_type,
                          n_distractors=args.n_distractors)
-    data = msw.generate(args.n_examples,
-                        n_images=args.n_images,
-                        correct=args.correct,
-                        workers=args.workers,
-                        verbose=True)
 
-    np.savez_compressed(args.save, **data)
+    val_n = int(args.val * args.n_examples)
+    test_n = int(args.test * args.n_examples)
+    train_n = args.n_examples - val_n - test_n
 
-    if args.vis_dir is not None:
-        os.makedirs(args.vis_dir, exist_ok=True)
-        vis.visualize(args.vis_dir, data, n=args.n_vis)
+    os.makedirs(args.save_dir, exist_ok=True)
+
+    train = msw.generate(train_n,
+                         n_images=args.n_images,
+                         correct=args.correct,
+                         workers=args.workers,
+                         verbose=True)
+    train_file = os.path.join(args.save_dir, 'train.npz')
+    np.savez_compressed(train_file, **train)
+
+    if val_n != 0:
+        val = msw.generate(val_n,
+                           n_images=args.n_images,
+                           correct=args.correct,
+                           workers=args.workers,
+                           verbose=True)
+        val_file = os.path.join(args.save_dir, 'val.npz')
+        np.savez_compressed(val_file, **val)
+
+    if test_n != 0:
+        test = msw.generate(test_n,
+                            n_images=args.n_images,
+                            correct=args.correct,
+                            workers=args.workers,
+                            verbose=True)
+        test_file = os.path.join(args.save_dir, 'test.npz')
+        np.savez_compressed(test_file, **test)
+
+    if args.vis is not None:
+        vis_dir = os.path.join(args.save_dir, 'vis')
+        os.makedirs(vis_dir, exist_ok=True)
+        vis.visualize(vis_dir, train, n=args.n_vis)
