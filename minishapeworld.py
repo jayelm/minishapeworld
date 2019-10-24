@@ -180,8 +180,8 @@ class MiniShapeWorld:
                 s1 = self.add_shape_rel(ss1, s2, relation, relation_dir)
                 if not s2.intersects(s1):
                     break
+                attempts += 1
             else:
-                # Failed
                 raise RuntimeError(
                     "Could not place shape onto image without intersection")
 
@@ -210,7 +210,6 @@ class MiniShapeWorld:
                                 assert True
                     attempts += 1
                 else:
-                    # Failed
                     raise RuntimeError("Could not place distractor onto "
                                        "image without intersection")
 
