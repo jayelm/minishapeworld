@@ -5,7 +5,6 @@ Config implementations
 from enum import Enum
 from collections import namedtuple
 
-
 _SpatialConfigBase = namedtuple('SpatialConfig', ['shapes', 'relation', 'dir'])
 _SingleConfigBase = namedtuple('SingleConfig', ['shape', 'color'])
 

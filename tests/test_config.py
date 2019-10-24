@@ -134,8 +134,9 @@ def test_does_not_validate_2():
     s5 = shape.SHAPE_IMPLS['triangle'](color_='red', x=41, y=10)
     assert cfg.does_not_validate([s1, s2], s5)
 
+
 def test_does_not_validate_3():
-    # i.e. above 
+    # i.e. above
     cfg = config.SpatialConfig((('green', None), (None, 'triangle')), 1, 1)
     s1 = shape.SHAPE_IMPLS['ellipse'](color_='green', x=0, y=20)
     s2 = shape.SHAPE_IMPLS['triangle'](color_='white', x=0, y=30)

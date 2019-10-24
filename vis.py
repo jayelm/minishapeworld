@@ -5,7 +5,6 @@ Visualizing datasets with HTML
 import os
 from PIL import Image
 
-
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>

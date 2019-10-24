@@ -67,13 +67,26 @@ class MiniShapeWorld:
                  n,
                  n_images=10,
                  correct=0.5,
+                 n_correct=None,
                  float_type=False,
                  pool=None,
                  workers=0,
                  verbose=False):
+        """
+        Generate dataset
+        :param n: number of examples to generate
+        :param n_images: number of images per example
+        :param correct: proportion of positive examples
+        :param n_correct: exact number of positive examples (will override correct percentage); cannot 0 or more than n_images
+        :param float_type: return images as np.float32 array between 0.0 and
+            1.0, rather than uint8 between 0 and 255
+        :param pool: use this multiprocessing pool
+        :param workers: number of workers to use (will create own pool; cannot use with pool)
+        :param verbose: print progress
+        """
         do_mp = workers > 0
         if not do_mp and pool is not None:
-            raise ValueError("Can't specify pool if do_mp=True")
+            raise ValueError("Can't specify pool if workers > 0")
         if do_mp:
             pool_was_none = False
             if pool is None:
@@ -87,11 +100,14 @@ class MiniShapeWorld:
         elif self.data_type == 'caption':
             n_images = 1
 
+        if n_correct is not None:
+            assert 0 < n_correct <= n_images, f"n_correct ({n_correct}) must be > 0 and <= n_images ({n_images})"
+
         all_imgs = np.zeros((n, n_images, 64, 64, 3), dtype=np.uint8)
         all_labels = np.zeros((n, n_images), dtype=np.uint8)
         configs = []
 
-        mp_args = [(n_images, correct, i) for i in range(n)]
+        mp_args = [(n_images, correct, n_correct, i) for i in range(n)]
 
         if do_mp:
             gen_iter = pool.imap(self.img_func, mp_args)
@@ -126,15 +142,20 @@ class MiniShapeWorld:
         Generate a single image
         """
         random.seed()
-        n_images, correct, i = mp_args
+        n_images, correct, n_correct, i = mp_args
         # Get shapes and relations
         imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
         cfg = self.random_config_spatial()
-        # Minimum of 2 correct worlds/2 distractors
         if self.data_type == 'concept':
-            n_target = 2
-            n_distract = 2
+            if n_correct is not None:
+                # Fixed number of targets and distractors
+                n_target = n_correct
+                n_distract = n_images - n_target
+            else:
+                # Minimum of 2 targets and distractors each
+                n_target = 2
+                n_distract = 2
         else:
             n_target = 1
             n_distract = n_images  # Never run out of distractors
@@ -166,18 +187,13 @@ class MiniShapeWorld:
 
             # Place distractor shapes
             existing_shapes = [s1, s2]
-            assert not new_cfg.does_not_validate([s1], s2)
-            assert not new_cfg.does_not_validate([s2], s1)
-            assert not new_cfg.does_not_validate([s1, s2], s1)
-            assert not new_cfg.does_not_validate([s1, s2], s2)
             n_dist = self.sample_n_distractor()
             for _ in range(n_dist):
                 attempts = 0
                 while attempts < c.MAX_DISTRACTOR_PLACEMENT_ATTEMPTS:
-                    dss = self.sample_distractor(existing_shapes=existing_shapes)
+                    dss = self.sample_distractor(
+                        existing_shapes=existing_shapes)
                     ds = self.add_shape(dss)
-                    # If negative example, ensure distractor shape does not
-                    # make the true config valid
                     # No intersections
                     if not any(ds.intersects(s) for s in existing_shapes):
                         if label:
@@ -232,21 +248,22 @@ class MiniShapeWorld:
         elif invalid_prop == config.ConfigProps.SHAPE_2_COLOR:
             inv_cfg = ((shape_1_color, shape_1_shape),
                        (self.new_color(shape_2_color),
-                     shape_2_shape)), relation, relation_dir
+                        shape_2_shape)), relation, relation_dir
         elif invalid_prop == config.ConfigProps.SHAPE_2_SHAPE:
             inv_cfg = ((shape_1_color, shape_1_shape),
-                    (shape_2_color,
-                     self.new_shape(shape_2_shape))), relation, relation_dir
+                       (shape_2_color,
+                        self.new_shape(shape_2_shape))), relation, relation_dir
         elif invalid_prop == config.ConfigProps.RELATION_DIR:
             inv_cfg = ((shape_1_color, shape_1_shape),
-                    (shape_2_color, shape_2_shape)), relation, 1 - relation_dir
+                       (shape_2_color,
+                        shape_2_shape)), relation, 1 - relation_dir
         else:
             raise RuntimeError
         return config.SpatialConfig(*inv_cfg)
 
     def generate_single(self, mp_args):
         random.seed()
-        n_images, correct, i = mp_args
+        n_images, correct, n_correct, i = mp_args
         imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
         cfg = self.random_config_single()
@@ -348,10 +365,8 @@ class MiniShapeWorld:
         return n_dist
 
     def sample_distractor(self, existing_shapes=()):
-        d = (self.random_color(
-            unrestricted=self.unrestricted_distractors),
-             self.random_shape(
-                 unrestricted=self.unrestricted_distractors))
+        d = (self.random_color(unrestricted=self.unrestricted_distractors),
+             self.random_shape(unrestricted=self.unrestricted_distractors))
         if d in existing_shapes:
             return self.sample_distractor(existing_shapes=existing_shapes)
         return d
@@ -490,25 +505,21 @@ if __name__ == '__main__':
                         choices=['concept', 'reference', 'caption'],
                         default='concept',
                         help='What kind of data to generate')
-    parser.add_argument(
-        '--n_distractors',
-        default=[2, 3],
-        nargs='*',
-        type=int,
-        help='Number of distractor shapes (for spatial only); '
-             'either one int or (min, max)'
-    )
+    parser.add_argument('--n_distractors',
+                        default=[2, 3],
+                        nargs='*',
+                        type=int,
+                        help='Number of distractor shapes (for spatial only); '
+                        'either one int or (min, max)')
     parser.add_argument('--img_type',
                         choices=['single', 'spatial'],
                         default='spatial',
                         help='What kind of images to generate')
-    parser.add_argument(
-        '--vis_dir',
-        default=None,
-        type=str,
-        help='If specified, save sample visualization of data '
-             '(100 images) to this folder'
-    )
+    parser.add_argument('--vis_dir',
+                        default=None,
+                        type=str,
+                        help='If specified, save sample visualization of data '
+                        'to this folder')
     parser.add_argument('--n_vis',
                         default=100,
                         type=int,
