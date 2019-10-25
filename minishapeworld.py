@@ -14,7 +14,6 @@ import shape
 import config
 import constants as c
 import vis
-import lang
 
 
 class MiniShapeWorld:
@@ -69,6 +68,7 @@ class MiniShapeWorld:
                  correct=0.5,
                  n_correct=None,
                  float_type=False,
+                 configs=None,
                  pool=None,
                  workers=0,
                  verbose=False):
@@ -80,6 +80,7 @@ class MiniShapeWorld:
         :param n_correct: exact number of positive examples (will override correct percentage); cannot 0 or more than n_images
         :param float_type: return images as np.float32 array between 0.0 and
             1.0, rather than uint8 between 0 and 255
+        :param configs: sample from these possible configs (else will generate random configs)
         :param pool: use this multiprocessing pool
         :param workers: number of workers to use (will create own pool; cannot use with pool)
         :param verbose: print progress
@@ -105,9 +106,8 @@ class MiniShapeWorld:
 
         all_imgs = np.zeros((n, n_images, 64, 64, 3), dtype=np.uint8)
         all_labels = np.zeros((n, n_images), dtype=np.uint8)
-        configs = []
 
-        mp_args = [(n_images, correct, n_correct, i) for i in range(n)]
+        mp_args = [(n_images, correct, n_correct, configs, i) for i in range(n)]
 
         if do_mp:
             gen_iter = pool.imap(self.img_func, mp_args)
@@ -115,10 +115,12 @@ class MiniShapeWorld:
             gen_iter = map(self.img_func, mp_args)
         if verbose:
             gen_iter = tqdm(gen_iter, total=n)
+
+        sampled_configs = []
         for imgs, labels, cfg, i in gen_iter:
             all_imgs[i, ] = imgs
             all_labels[i, ] = labels
-            configs.append(cfg)
+            sampled_configs.append(cfg)
 
         if do_mp and pool_was_none:  # Remember to close the pool
             pool.close()
@@ -127,7 +129,7 @@ class MiniShapeWorld:
         if float_type:
             all_imgs = np.divide(all_imgs, 255.0)
             all_labels = all_labels.astype(np.float32)
-        langs = np.array([lang.fmt_config(c) for c in configs],
+        langs = np.array([str(c) for c in sampled_configs],
                          dtype=np.unicode)
 
         if self.data_type == 'caption':
@@ -142,11 +144,13 @@ class MiniShapeWorld:
         Generate a single image
         """
         random.seed()
-        n_images, correct, n_correct, i = mp_args
-        # Get shapes and relations
+        n_images, correct, n_correct, configs, i = mp_args
         imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
-        cfg = self.random_config_spatial()
+        if configs is not None:
+            cfg = random.sample(configs)
+        else:
+            cfg = self.random_config_spatial()
         if self.data_type == 'concept':
             if n_correct is not None:
                 # Fixed number of targets and distractors
@@ -206,7 +210,7 @@ class MiniShapeWorld:
                                 existing_shapes.append(ds)
                                 break
                             else:
-                                #  print(f"Adding new shape {ds} to existing shapes {existing_shapes} validates the original config {lang.fmt_config(cfg)} (attempt {attempts})")
+                                #  print(f"Adding new shape {ds} to existing shapes {existing_shapes} validates the original config {str(cfg)} (attempt {attempts})")
                                 assert True
                     attempts += 1
                 else:
@@ -262,10 +266,13 @@ class MiniShapeWorld:
 
     def generate_single(self, mp_args):
         random.seed()
-        n_images, correct, n_correct, i = mp_args
+        n_images, correct, n_correct, configs, i = mp_args
         imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
-        cfg = self.random_config_single()
+        if configs is not None:
+            cfg = random.sample(configs)
+        else:
+            cfg = self.random_config_single()
         if self.data_type == 'concept':
             n_target = 2
             n_distract = 2

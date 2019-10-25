@@ -64,9 +64,48 @@ class SpatialConfig(_SpatialConfigBase):
                         return False
         return True
 
+    def __str__(self):
+        (s1, s2), relation, relation_dir = self
+        if relation == 0:
+            if relation_dir == 0:
+                rel_txt = 'left'
+            else:
+                rel_txt = 'right'
+        else:
+            if relation_dir == 0:
+                rel_txt = 'below'
+            else:
+                rel_txt = 'above'
+        if s1[0] is None:
+            s1_0_txt = ''
+        else:
+            s1_0_txt = s1[0]
+        if s1[1] is None:
+            s1_1_txt = 'shape'
+        else:
+            s1_1_txt = s1[1]
+        if s2[0] is None:
+            s2_0_txt = ''
+        else:
+            s2_0_txt = s2[0]
+        if s2[1] is None:
+            s2_1_txt = 'shape'
+        else:
+            s2_1_txt = s2[1]
+        return '{} {} {} {} {}'.format(s1_0_txt, s1_1_txt, rel_txt, s2_0_txt,
+                                       s2_1_txt)
+
 
 class SingleConfig(_SingleConfigBase):
-    pass
+    def __str__(self):
+        color_, shape_ = self
+        shape_txt = 'shape'
+        color_txt = ''
+        if shape_ is not None:
+            shape_txt = shape_
+        if color_ is not None:
+            color_txt = color_ + ' '
+        return '{}{}'.format(color_txt, shape_txt)
 
 
 class ShapeSpec(Enum):
