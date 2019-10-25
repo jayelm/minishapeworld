@@ -132,7 +132,7 @@ class MiniShapeWorld:
         if n_correct is not None:
             assert 0 < n_correct <= n_images, f"n_correct ({n_correct}) must be > 0 and <= n_images ({n_images})"
 
-        all_imgs = np.zeros((n, n_images, 64, 64, 3), dtype=np.uint8)
+        all_imgs = np.zeros((n, n_images, 3, 64, 64), dtype=np.uint8)
         all_labels = np.zeros((n, n_images), dtype=np.uint8)
 
         mp_args = [(n_images, correct, n_correct, configs, i) for i in range(n)]
@@ -173,7 +173,7 @@ class MiniShapeWorld:
         """
         random.seed()
         n_images, correct, n_correct, configs, i = mp_args
-        imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
+        imgs = np.zeros((n_images, 3, 64, 64), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
         if configs is not None:
             cfg_idx = random.choice(len(configs))
@@ -249,7 +249,8 @@ class MiniShapeWorld:
             # Create image and draw shapes
             img = image.IMG()
             img.draw_shapes(existing_shapes)
-            imgs[w_idx] = img.array()
+            # Use NCHW for pytorch
+            imgs[w_idx] = np.transpose(img.array(), (2, 0, 1))
             labels[w_idx] = label
         return imgs, labels, cfg, i
 
@@ -296,7 +297,7 @@ class MiniShapeWorld:
     def generate_single(self, mp_args):
         random.seed()
         n_images, correct, n_correct, configs, i = mp_args
-        imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
+        imgs = np.zeros((n_images, 3, 64, 64), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
         if configs is not None:
             cfg_idx = random.choice(len(configs))
@@ -332,7 +333,7 @@ class MiniShapeWorld:
             # Create image and draw shape
             img = image.IMG()
             img.draw_shapes([s])
-            imgs[w_idx] = img.array()
+            imgs[w_idx] = np.transpose(img.array(), (2, 0, 1))
             labels[w_idx] = label
         return imgs, labels, cfg, i
 

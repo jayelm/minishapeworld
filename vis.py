@@ -2,8 +2,11 @@
 Visualizing datasets with HTML
 """
 
+
 import os
+import numpy as np
 from PIL import Image
+
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -51,6 +54,7 @@ def visualize(img_dir, data, n=100):
                 os.path.join(img_dir, '{}.png'.format(example_i)))
         else:
             for image_i, image in enumerate(example):
+                image = np.transpose(image, (1, 2, 0))
                 Image.fromarray(image).save(
                     os.path.join(img_dir,
                                  '{}_{}.png'.format(example_i, image_i)))
