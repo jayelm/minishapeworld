@@ -70,7 +70,7 @@ class MiniShapeWorld:
         """
         total_configs = set()
 
-        if self.img_type  == 'single':
+        if self.img_type == 'single':
             cfg_func = self.random_config_single
         elif self.img_type == 'spatial':
             cfg_func = self.random_config_spatial
