@@ -46,6 +46,8 @@ class MiniShapeWorld:
         self.img_type = img_type
         if img_type not in ['spatial', 'single']:
             raise NotImplementedError("img_type = {}".format(img_type))
+        # TODO: collapse generate_spatial/generate_single functions (there's
+        # overlap in code)
         if img_type == 'spatial':
             self.img_func = self.generate_spatial
         elif img_type == 'single':
@@ -61,6 +63,32 @@ class MiniShapeWorld:
         self.n_distractors = n_distractors
         self.unique_distractors = unique_distractors
         self.unrestricted_distractors = unrestricted_distractors
+
+    def generate_configs(self, n, verbose=False):
+        """
+        Generate unique configs
+        """
+        total_configs = set()
+
+        if self.img_type  == 'single':
+            cfg_func = self.random_config_single
+        elif self.img_type == 'spatial':
+            cfg_func = self.random_config_spatial
+
+        if verbose:
+            pbar = tqdm(total=n)
+
+        while len(total_configs) < n:
+            new_cfg = cfg_func()
+            if new_cfg not in total_configs:
+                total_configs.add(new_cfg)
+                if verbose:
+                    pbar.update(1)
+
+        if verbose:
+            pbar.close()
+
+        return list(total_configs)
 
     def generate(self,
                  n,
@@ -148,7 +176,8 @@ class MiniShapeWorld:
         imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
         if configs is not None:
-            cfg = random.sample(configs)
+            cfg_idx = random.choice(len(configs))
+            cfg = configs[cfg_idx]
         else:
             cfg = self.random_config_spatial()
         if self.data_type == 'concept':
@@ -270,7 +299,8 @@ class MiniShapeWorld:
         imgs = np.zeros((n_images, 64, 64, 3), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
         if configs is not None:
-            cfg = random.sample(configs)
+            cfg_idx = random.choice(len(configs))
+            cfg = configs[cfg_idx]
         else:
             cfg = self.random_config_single()
         if self.data_type == 'concept':
@@ -398,7 +428,7 @@ class MiniShapeWorld:
             return self.random_config_spatial()
         relation = random.randint(2)
         relation_dir = random.randint(2)
-        return config.SpatialConfig([shape_1, shape_2], relation, relation_dir)
+        return config.SpatialConfig((shape_1, shape_2), relation, relation_dir)
 
     def add_shape_from_spec(self,
                             spec,
@@ -491,10 +521,18 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='Fast ShapeWorld',
                             formatter_class=ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--n_examples',
+    parser.add_argument('--n_train',
                         type=int,
                         default=100,
-                        help='Number of examples')
+                        help='Number of train examples')
+    parser.add_argument('--n_val',
+                        default=100,
+                        type=float,
+                        help='Number of val examples (if 0 will not create)')
+    parser.add_argument('--n_test',
+                        default=100,
+                        type=float,
+                        help='Number of test examples (if 0 will not create)')
     parser.add_argument('--n_images',
                         type=int,
                         default=10,
@@ -502,14 +540,18 @@ if __name__ == '__main__':
     parser.add_argument('--config_split',
                         action='store_true',
                         help='Enforce unique configs across splits')
-    parser.add_argument('--val',
-                        default=0.1,
-                        type=float,
-                        help='What %% of --n_examples belong to val? (if 0 will not create)')
-    parser.add_argument('--test',
-                        default=0.1,
-                        type=float,
-                        help='What %% of --n_examples belong to test? (if 0 will not create)')
+    parser.add_argument('--train_configs',
+                        default=2000,
+                        type=int,
+                        help='If --config_split, how many unique configs at train?')
+    parser.add_argument('--val_configs',
+                        default=500,
+                        type=int,
+                        help='If --config_split, how many unique configs at val?')
+    parser.add_argument('--test_configs',
+                        default=500,
+                        type=int,
+                        help='If --config_split, how many unique configs at test?')
     parser.add_argument('--correct',
                         type=float,
                         default=0.5,
@@ -545,13 +587,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.val < 0 or args.val >= 1.0:
-        parser.error("--val must be in [0, 1)")
-    if args.test < 0 or args.test >= 1.0:
-        parser.error("--test must be in [0, 1)")
-    if (args.val + args.test >= 1.0):
-        parser.error(f"--val and test combined cannot be >= 1 (got {args.val + args.test})")
-
     if len(args.n_distractors) == 1:
         args.n_distractors = args.n_distractors[0]
     elif len(args.n_distractors) == 2:
@@ -563,34 +598,45 @@ if __name__ == '__main__':
                          img_type=args.img_type,
                          n_distractors=args.n_distractors)
 
-    val_n = int(args.val * args.n_examples)
-    test_n = int(args.test * args.n_examples)
-    train_n = args.n_examples - val_n - test_n
+    if args.config_split:
+        # Pre-generate unique configs
+        total_configs = args.train_configs + args.val_configs + args.test_configs
+        configs = msw.generate_configs(total_configs, verbose=True)
+        train_configs = configs[:args.train_configs]
+        val_configs = configs[args.train_configs:args.train_configs + args.val_configs]
+        test_configs = configs[args.train_configs + args.val_configs:]
+    else:
+        train_configs = None
+        val_configs = None
+        test_configs = None
 
     os.makedirs(args.save_dir, exist_ok=True)
 
-    train = msw.generate(train_n,
+    train = msw.generate(args.n_train,
                          n_images=args.n_images,
                          correct=args.correct,
                          workers=args.workers,
+                         configs=train_configs,
                          verbose=True)
     train_file = os.path.join(args.save_dir, 'train.npz')
     np.savez_compressed(train_file, **train)
 
-    if val_n != 0:
-        val = msw.generate(val_n,
+    if args.n_val != 0:
+        val = msw.generate(args.n_val,
                            n_images=args.n_images,
                            correct=args.correct,
                            workers=args.workers,
+                           configs=val_configs,
                            verbose=True)
         val_file = os.path.join(args.save_dir, 'val.npz')
         np.savez_compressed(val_file, **val)
 
-    if test_n != 0:
-        test = msw.generate(test_n,
+    if args.n_test != 0:
+        test = msw.generate(args.n_test,
                             n_images=args.n_images,
                             correct=args.correct,
                             workers=args.workers,
+                            configs=test_configs,
                             verbose=True)
         test_file = os.path.join(args.save_dir, 'test.npz')
         np.savez_compressed(test_file, **test)
