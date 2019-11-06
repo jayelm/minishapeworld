@@ -285,7 +285,10 @@ class MiniShapeWorld:
             properties.append(config.ConfigProps.SHAPE_2_COLOR)
         if shape_2_shape is not None:
             properties.append(config.ConfigProps.SHAPE_2_SHAPE)
-        properties.append(config.ConfigProps.RELATION_DIR)
+        sp = len(properties)
+        # Invalidate relations half of the time
+        for _ in range(sp):
+            properties.append(config.ConfigProps.RELATION_DIR)
         # Randomly select property to invalidate
         # TODO: Support for invalidating multiple properties
         invalid_prop = random.choice(properties)
