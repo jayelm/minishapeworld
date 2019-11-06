@@ -93,6 +93,7 @@ class MiniShapeWorld:
     def generate(self,
                  n,
                  n_images=10,
+                 min_correct=None,
                  correct=0.5,
                  n_correct=None,
                  float_type=False,
@@ -135,7 +136,7 @@ class MiniShapeWorld:
         all_imgs = np.zeros((n, n_images, 3, 64, 64), dtype=np.uint8)
         all_labels = np.zeros((n, n_images), dtype=np.uint8)
 
-        mp_args = [(n_images, correct, n_correct, configs, i) for i in range(n)]
+        mp_args = [(n_images, min_correct, correct, n_correct, configs, i) for i in range(n)]
 
         if do_mp:
             gen_iter = pool.imap(self.img_func, mp_args)
@@ -172,7 +173,7 @@ class MiniShapeWorld:
         Generate a single image
         """
         random.seed()
-        n_images, correct, n_correct, configs, i = mp_args
+        n_images, min_correct, correct, n_correct, configs, i = mp_args
         imgs = np.zeros((n_images, 3, 64, 64), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
         if configs is not None:
@@ -185,6 +186,11 @@ class MiniShapeWorld:
                 # Fixed number of targets and distractors
                 n_target = n_correct
                 n_distract = n_images - n_target
+            elif min_correct is not None:
+                # Minimum number of targets, otherwise sample whatever
+                # TODO: combine min_correct and min_incorrect
+                n_target = min_correct
+                n_distract = 0
             else:
                 # Minimum of 2 targets and distractors each
                 n_target = 2
@@ -308,7 +314,7 @@ class MiniShapeWorld:
 
     def generate_single(self, mp_args):
         random.seed()
-        n_images, correct, n_correct, configs, i = mp_args
+        n_images, min_correct, correct, n_correct, configs, i = mp_args
         imgs = np.zeros((n_images, 3, 64, 64), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
         if configs is not None:
@@ -553,6 +559,11 @@ if __name__ == '__main__':
     parser.add_argument('--config_split',
                         action='store_true',
                         help='Enforce unique configs across splits')
+    parser.add_argument('--gen_same',
+                        action='store_true',
+                        help='Generate val_same/test_s datasets consisting of same configs as train (requires --config_split)')
+    parser.add_argument('--n_val_same', type=int, default=100, help='Number of val same examples (if not --gen_same or 0 will not create)')
+    parser.add_argument('--n_test_same', type=int, default=100, help='Number of test same examples (if not --gen_same or 0 will not create)')
     parser.add_argument('--train_configs',
                         default=2000,
                         type=int,
@@ -565,6 +576,10 @@ if __name__ == '__main__':
                         default=500,
                         type=int,
                         help='If --config_split, how many unique configs at test?')
+    parser.add_argument('--min_correct',
+                        type=int,
+                        default=None,
+                        help='Minimum number of correct images - generate this many, then choose randomly with --correct')
     parser.add_argument('--correct',
                         type=float,
                         default=0.5,
@@ -572,7 +587,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_correct',
                         type=int,
                         default=None,
-                        help='Exact number of correct images (must be less than n_images; concept only; overrides --correct)')
+                        help='Exact number of correct images (must be less than n_images; concept only; overrides --correct and --min_correct)')
     parser.add_argument('--workers',
                         default=0,
                         type=int,
@@ -611,6 +626,9 @@ if __name__ == '__main__':
     else:
         parser.error("--n_distractors must be either 1 int or 2 (min, max)")
 
+    if args.gen_same and not args.config_split:
+        parser.error("--config_split must be set to use --gen_same")
+
     msw = MiniShapeWorld(data_type=args.data_type,
                          img_type=args.img_type,
                          n_distractors=args.n_distractors)
@@ -631,6 +649,7 @@ if __name__ == '__main__':
 
     train = msw.generate(args.n_train,
                          n_images=args.n_images,
+                         min_correct=args.min_correct,
                          correct=args.correct,
                          n_correct=args.n_correct,
                          workers=args.workers,
@@ -642,6 +661,7 @@ if __name__ == '__main__':
     if args.n_val != 0:
         val = msw.generate(args.n_val,
                            n_images=args.n_images,
+                           min_correct=args.min_correct,
                            correct=args.correct,
                            n_correct=args.n_correct,
                            workers=args.workers,
@@ -653,6 +673,7 @@ if __name__ == '__main__':
     if args.n_test != 0:
         test = msw.generate(args.n_test,
                             n_images=args.n_images,
+                            min_correct=args.min_correct,
                             correct=args.correct,
                             n_correct=args.n_correct,
                             workers=args.workers,
@@ -660,6 +681,30 @@ if __name__ == '__main__':
                             verbose=True)
         test_file = os.path.join(args.save_dir, 'test.npz')
         np.savez_compressed(test_file, **test)
+
+    if args.gen_same and args.n_val_same != 0:
+        val_same = msw.generate(args.n_val_same,
+                                n_images=args.n_images,
+                                min_correct=args.min_correct,
+                                correct=args.correct,
+                                n_correct=args.n_correct,
+                                workers=args.workers,
+                                configs=train_configs,  # same
+                                verbose=True)
+        val_same_file = os.path.join(args.save_dir, 'val_same.npz')
+        np.savez_compressed(val_same_file, **val_same)
+
+    if args.gen_same and args.n_test_same != 0:
+        test_same = msw.generate(args.n_test_same,
+                                 n_images=args.n_images,
+                                 min_correct=args.min_correct,
+                                 correct=args.correct,
+                                 n_correct=args.n_correct,
+                                 workers=args.workers,
+                                 configs=train_configs,  # same
+                                 verbose=True)
+        test_same_file = os.path.join(args.save_dir, 'test_same.npz')
+        np.savez_compressed(test_same_file, **test_same)
 
     if args.vis is not None:
         vis_dir = os.path.join(args.save_dir, 'vis')
