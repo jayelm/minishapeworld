@@ -92,8 +92,8 @@ class SpatialConfig(_SpatialConfigBase):
             s2_1_txt = 'shape'
         else:
             s2_1_txt = s2[1]
-        return '{} {} {} {} {}'.format(s1_0_txt, s1_1_txt, rel_txt, s2_0_txt,
-                                       s2_1_txt)
+        parts = [s1_0_txt, s1_1_txt, rel_txt, s2_0_txt, s2_1_txt]
+        return ' '.join(s for s in parts if s != '')
 
 
 class SingleConfig(_SingleConfigBase):

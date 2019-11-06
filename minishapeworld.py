@@ -203,20 +203,31 @@ class MiniShapeWorld:
                 n_distract -= 1
             else:
                 label = (random.random() < correct)
-            new_cfg = cfg if label else self.invalidate_spatial(cfg)
-            (ss1, ss2), relation, relation_dir = new_cfg
-            s2 = self.add_shape_from_spec(ss2, relation, relation_dir)
+            cfg_attempts = 0
+            while cfg_attempts < c.MAX_INVALIDATE_ATTEMPTS:
+                new_cfg = cfg if label else self.invalidate_spatial(cfg)
+                (ss1, ss2), relation, relation_dir = new_cfg
+                s2 = self.add_shape_from_spec(ss2, relation, relation_dir)
 
-            # Place second shape
-            attempts = 0
-            while attempts < c.MAX_PLACEMENT_ATTEMPTS:
-                s1 = self.add_shape_rel(ss1, s2, relation, relation_dir)
-                if not s2.intersects(s1):
+                # Place second shape
+                attempts = 0
+                while attempts < c.MAX_PLACEMENT_ATTEMPTS:
+                    s1 = self.add_shape_rel(ss1, s2, relation, relation_dir)
+                    if not s2.intersects(s1):
+                        break
+                    attempts += 1
+                else:
+                    raise RuntimeError(
+                        "Could not place shape onto image without intersection")
+
+                if label:  # Positive example
                     break
-                attempts += 1
-            else:
-                raise RuntimeError(
-                    "Could not place shape onto image without intersection")
+                elif cfg.does_not_validate([s1], s2):
+                    break
+                else:
+                    print(f"Shapes {[s1, s2]} for invalid config '{str(new_cfg)}' validates the original config '{str(cfg)}' (attempt {cfg_attempts})")
+
+                cfg_attempts += 1
 
             # Place distractor shapes
             existing_shapes = [s1, s2]
