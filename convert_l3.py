@@ -39,6 +39,11 @@ if __name__ == '__main__':
         labels = data['labels'][:, -1]
         assert np.all(data['labels'][:, :4] == 1)
 
+        # Convert to floats
+        examples = examples.astype(np.float32) / 255.0
+        inputs = inputs.astype(np.float32) / 255.0
+        labels = labels.astype(np.float32)
+
         split_dir = os.path.join(args.save_dir, split)
         os.makedirs(split_dir, exist_ok=True)
 
