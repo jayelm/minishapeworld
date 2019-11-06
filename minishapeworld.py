@@ -225,7 +225,8 @@ class MiniShapeWorld:
                 elif cfg.does_not_validate([s1], s2):
                     break
                 else:
-                    print(f"Shapes {[s1, s2]} for invalid config '{str(new_cfg)}' validates the original config '{str(cfg)}' (attempt {cfg_attempts})")
+                    # print(f"Shapes {[s1, s2]} for invalid config '{str(new_cfg)}' validates the original config '{str(cfg)}' (attempt {cfg_attempts})")
+                    assert True
 
                 cfg_attempts += 1
 
@@ -538,12 +539,12 @@ if __name__ == '__main__':
                         default=100,
                         help='Number of train examples')
     parser.add_argument('--n_val',
+                        type=int,
                         default=100,
-                        type=float,
                         help='Number of val examples (if 0 will not create)')
     parser.add_argument('--n_test',
+                        type=int,
                         default=100,
-                        type=float,
                         help='Number of test examples (if 0 will not create)')
     parser.add_argument('--n_images',
                         type=int,
@@ -568,6 +569,10 @@ if __name__ == '__main__':
                         type=float,
                         default=0.5,
                         help='Avg correct proportion of images (concept only)')
+    parser.add_argument('--n_correct',
+                        type=int,
+                        default=None,
+                        help='Exact number of correct images (must be less than n_images; concept only; overrides --correct)')
     parser.add_argument('--workers',
                         default=0,
                         type=int,
@@ -627,6 +632,7 @@ if __name__ == '__main__':
     train = msw.generate(args.n_train,
                          n_images=args.n_images,
                          correct=args.correct,
+                         n_correct=args.n_correct,
                          workers=args.workers,
                          configs=train_configs,
                          verbose=True)
@@ -637,6 +643,7 @@ if __name__ == '__main__':
         val = msw.generate(args.n_val,
                            n_images=args.n_images,
                            correct=args.correct,
+                           n_correct=args.n_correct,
                            workers=args.workers,
                            configs=val_configs,
                            verbose=True)
@@ -647,6 +654,7 @@ if __name__ == '__main__':
         test = msw.generate(args.n_test,
                             n_images=args.n_images,
                             correct=args.correct,
+                            n_correct=args.n_correct,
                             workers=args.workers,
                             configs=test_configs,
                             verbose=True)
