@@ -89,10 +89,11 @@ class MiniShapeWorld:
                  n,
                  n_images=10,
                  min_correct=None,
-                 correct=0.5,
+                 p_correct=0.5,
                  n_correct=None,
                  float_type=False,
                  configs=None,
+                 lang_type='standard',
                  pool=None,
                  workers=0,
                  verbose=False,
@@ -101,10 +102,15 @@ class MiniShapeWorld:
         Generate dataset
         :param n: number of examples to generate
         :param n_images: number of images per example
-        :param correct: proportion of positive examples
-        :param n_correct: exact number of positive examples (will override correct percentage); cannot 0 or more than n_images
+        :param min_correct: minimum number of positive examples (after minimum,
+            will randomly sample according to p_correct)
+        :param p_correct: proportion of positive examples to sample
+        :param n_correct: exact number of positive examples (will override
+            min_correct/p_correct behavior); cannot be 0 or more than n_images
         :param float_type: return images as np.float32 array between 0.0 and
             1.0, rather than uint8 between 0 and 255
+        :param lang_type: language type - either standard (full language) or
+            simple (just the essentials)
         :param configs: sample from these possible configs (else will generate random configs)
         :param pool: use this multiprocessing pool
         :param workers: number of workers to use (will create own pool; cannot use with pool)
@@ -118,6 +124,8 @@ class MiniShapeWorld:
             if pool is None:
                 pool_was_none = True
                 pool = mp.Pool(workers)
+        if lang_type not in ['standard', 'simple']:
+            raise NotImplementedError(f"lang_type = {lang_type}")
 
         if self.data_type == 'concept':
             assert n_images > 4, "Too few n_images"
@@ -132,7 +140,7 @@ class MiniShapeWorld:
         all_imgs = np.zeros((n, n_images, 3, c.DIM, c.DIM), dtype=np.uint8)
         all_labels = np.zeros((n, n_images), dtype=np.uint8)
 
-        mp_args = [(n_images, min_correct, correct, n_correct, configs, i) for i in range(n)]
+        mp_args = [(n_images, min_correct, p_correct, n_correct, configs, i) for i in range(n)]
 
         if do_mp:
             gen_iter = pool.imap(self._generate_one_mp, mp_args)
@@ -156,7 +164,7 @@ class MiniShapeWorld:
         if float_type:
             all_imgs = np.divide(all_imgs, 255.0)
             all_labels = all_labels.astype(np.float32)
-        langs = np.array([str(c) for c in target_configs],
+        langs = np.array([c.format(lang_type=lang_type) for c in target_configs],
                          dtype=np.unicode)
 
         if self.data_type == 'caption':
@@ -171,7 +179,7 @@ class MiniShapeWorld:
         Wrapper around generate_one which accepts a tuple of args (and an index
         i) for multiprocsesing purposes
 
-        mp_args is a tuple of (n_images, min_correct, correct, n_correct,
+        mp_args is a tuple of (n_images, min_correct, p_correct, n_correct,
         configs, i); see self.generate_one
         """
         *mp_args, i = mp_args
@@ -370,7 +378,7 @@ class MiniShapeWorld:
             color_ = self.random_color()
         s = shape.SHAPE_IMPLS[shape_](color_=color_)
 
-        return [s], new_cfg
+        return new_cfg, [s]
 
     def create_image(self, shapes):
         """
@@ -608,15 +616,15 @@ if __name__ == '__main__':
     parser.add_argument('--min_correct',
                         type=int,
                         default=None,
-                        help='Minimum number of correct images - generate this many, then choose randomly with --correct')
-    parser.add_argument('--correct',
+                        help='Minimum number of correct images - generate this many, then choose randomly with --p_correct')
+    parser.add_argument('--p_correct',
                         type=float,
                         default=0.5,
                         help='Avg correct proportion of images (concept only)')
     parser.add_argument('--n_correct',
                         type=int,
                         default=None,
-                        help='Exact number of correct images (must be less than n_images; concept only; overrides --correct and --min_correct)')
+                        help='Exact number of correct images (must be less than n_images; concept only; overrides --p_correct and --min_correct)')
     parser.add_argument('--workers',
                         default=0,
                         type=int,
@@ -679,7 +687,7 @@ if __name__ == '__main__':
     train = msw.generate(args.n_train,
                          n_images=args.n_images,
                          min_correct=args.min_correct,
-                         correct=args.correct,
+                         p_correct=args.p_correct,
                          n_correct=args.n_correct,
                          workers=args.workers,
                          configs=train_configs,
@@ -692,7 +700,7 @@ if __name__ == '__main__':
         val = msw.generate(args.n_val,
                            n_images=args.n_images,
                            min_correct=args.min_correct,
-                           correct=args.correct,
+                           p_correct=args.p_correct,
                            n_correct=args.n_correct,
                            workers=args.workers,
                            configs=val_configs,
@@ -705,7 +713,7 @@ if __name__ == '__main__':
         test = msw.generate(args.n_test,
                             n_images=args.n_images,
                             min_correct=args.min_correct,
-                            correct=args.correct,
+                            p_correct=args.p_correct,
                             n_correct=args.n_correct,
                             workers=args.workers,
                             configs=test_configs,
@@ -718,7 +726,7 @@ if __name__ == '__main__':
         val_same = msw.generate(args.n_val_same,
                                 n_images=args.n_images,
                                 min_correct=args.min_correct,
-                                correct=args.correct,
+                                p_correct=args.p_correct,
                                 n_correct=args.n_correct,
                                 workers=args.workers,
                                 configs=train_configs,  # same
@@ -731,7 +739,7 @@ if __name__ == '__main__':
         test_same = msw.generate(args.n_test_same,
                                  n_images=args.n_images,
                                  min_correct=args.min_correct,
-                                 correct=args.correct,
+                                 p_correct=args.p_correct,
                                  n_correct=args.n_correct,
                                  workers=args.workers,
                                  configs=train_configs,  # same

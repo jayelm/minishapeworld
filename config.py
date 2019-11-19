@@ -9,6 +9,15 @@ _SpatialConfigBase = namedtuple('SpatialConfig', ['shapes', 'relation', 'dir'])
 _SingleConfigBase = namedtuple('SingleConfig', ['shape', 'color'])
 
 
+def a_or_an(s):
+    """
+    Return `a` or `an` depending on the first voewl sound of s. Dumb heuristic
+    """
+    if s[0].lower() in 'aeiou':
+        return 'an'
+    return 'a'
+
+
 def matches(spec, shape_):
     """
     Return True if the shape adheres to the spec (spec has optional color/shape
@@ -64,18 +73,32 @@ class SpatialConfig(_SpatialConfigBase):
                         return False
         return True
 
-    def __str__(self):
+    def format(self, lang_type='standard'):
+        if lang_type not in ('standard', 'simple'):
+            raise NotImplementedError(f"lang_type = {lang_type}")
         (s1, s2), relation, relation_dir = self
         if relation == 0:
             if relation_dir == 0:
-                rel_txt = 'left'
+                if lang_type == 'standard':
+                    rel_txt = 'is to the left of'
+                else:
+                    rel_txt = 'left'
             else:
-                rel_txt = 'right'
+                if lang_type == 'standard':
+                    rel_txt = 'is to the right of'
+                else:
+                    rel_txt = 'right'
         else:
             if relation_dir == 0:
-                rel_txt = 'below'
+                if lang_type == 'standard':
+                    rel_txt = 'is below'
+                else:
+                    rel_txt = 'below'
             else:
-                rel_txt = 'above'
+                if lang_type == 'standard':
+                    rel_txt = 'is above'
+                else:
+                    rel_txt = 'above'
         if s1[0] is None:
             s1_0_txt = ''
         else:
@@ -92,12 +115,25 @@ class SpatialConfig(_SpatialConfigBase):
             s2_1_txt = 'shape'
         else:
             s2_1_txt = s2[1]
-        parts = [s1_0_txt, s1_1_txt, rel_txt, s2_0_txt, s2_1_txt]
+        if lang_type == 'standard':
+            s1_article = a_or_an(s1_0_txt + s1_1_txt)
+            s2_article = a_or_an(s2_0_txt + s2_1_txt)
+            period_txt = '.'
+        else:
+            s1_article = ''
+            s2_article = ''
+            period_txt = ''
+        parts = [s1_article, s1_0_txt, s1_1_txt, rel_txt, s2_article, s2_0_txt, s2_1_txt, period_txt]
         return ' '.join(s for s in parts if s != '')
+
+    def __str__(self):
+        return self.format(lang_type='standard')
 
 
 class SingleConfig(_SingleConfigBase):
-    def __str__(self):
+    def format(self, lang_type):
+        if lang_type not in ('standard', 'simple'):
+            raise NotImplementedError(f"lang_type = {lang_type}")
         color_, shape_ = self
         shape_txt = 'shape'
         color_txt = ''
@@ -105,7 +141,16 @@ class SingleConfig(_SingleConfigBase):
             shape_txt = shape_
         if color_ is not None:
             color_txt = color_ + ' '
-        return '{}{}'.format(color_txt, shape_txt)
+        if lang_type == 'standard':
+            exists_txt = 'there is {} '.format(a_or_an(color_txt + shape_txt))
+            period_txt = ' .'
+        else:
+            exists_txt = ''
+            period_txt = ''
+        return f"{exists_txt}{color_txt}{shape_txt}{period_txt}"
+
+    def __str__(self):
+        return self.format(lang_type='standard')
 
 
 class ShapeSpec(Enum):
