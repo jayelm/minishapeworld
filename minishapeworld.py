@@ -7,6 +7,7 @@ from numpy import random
 from tqdm import tqdm
 import os
 import multiprocessing as mp
+import json
 
 import image
 import color
@@ -14,6 +15,14 @@ import shape
 import config
 import constants as c
 import vis
+
+
+def world_json(config, shapes, lang_type='standard'):
+    return {
+        'lang': config.format(lang_type=lang_type),
+        'config': config.json(),
+        'shapes': [s.json() for s in shapes]
+    }
 
 
 class MiniShapeWorld:
@@ -115,6 +124,11 @@ class MiniShapeWorld:
         :param pool: use this multiprocessing pool
         :param workers: number of workers to use (will create own pool; cannot use with pool)
         :param verbose: print progress
+
+        :return data: a dict with keys ['langs', 'imgs', 'labels'], each
+        np.arrays
+        :return worlds: a JSON object: list of [lists of worlds], each world
+            being the shapes and config (possibly invalidated) for the image
         """
         do_mp = workers > 0
         if not do_mp and pool is not None:
@@ -151,11 +165,17 @@ class MiniShapeWorld:
 
         target_configs = []
         all_configs = []
-        for imgs, labels, target_cfg, cfgs, i in gen_iter:
+        world_jsons = []
+        for imgs, labels, target_cfg, cfgs, shapes, i in gen_iter:
             all_imgs[i, ] = imgs
             all_labels[i, ] = labels
             target_configs.append(target_cfg)
             all_configs.append(cfgs)
+            wjsons = [world_json(cfg, s) for cfg, s in zip(cfgs, shapes)]
+            if self.data_type == 'caption':
+                # No multiple images per example
+                wjsons = wjsons[0]
+            world_jsons.append(wjsons)
 
         if do_mp and pool_was_none:  # Remember to close the pool
             pool.close()
@@ -164,7 +184,7 @@ class MiniShapeWorld:
         if float_type:
             all_imgs = np.divide(all_imgs, 255.0)
             all_labels = all_labels.astype(np.float32)
-        langs = np.array([c.format(lang_type=lang_type) for c in target_configs],
+        langs = np.array([cfg.format(lang_type=lang_type) for cfg in target_configs],
                          dtype=np.unicode)
 
         if self.data_type == 'caption':
@@ -172,7 +192,11 @@ class MiniShapeWorld:
             all_imgs = all_imgs.squeeze(1)
             all_labels = all_labels.squeeze(1)
 
-        return {'imgs': all_imgs, 'labels': all_labels, 'langs': langs}
+        return {
+            'imgs': all_imgs,
+            'labels': all_labels,
+            'langs': langs,
+        }, world_jsons
 
     def _generate_one_mp(self, mp_args):
         """
@@ -240,6 +264,7 @@ class MiniShapeWorld:
             n_distract = n_images  # Never run out of distractors
 
         cfgs = []
+        shapes = []
         for i in range(n_images):
             if n_target > 0:
                 label = 1
@@ -251,17 +276,18 @@ class MiniShapeWorld:
                 label = (random.random() < p_correct)
 
             if self.img_type == 'spatial':
-                new_cfg, shapes = self.generate_spatial(target_cfg, label)
+                new_cfg, new_shapes = self.generate_spatial(target_cfg, label)
             elif self.img_type == 'single':
-                new_cfg, shapes = self.generate_single(target_cfg, label)
+                new_cfg, new_shapes = self.generate_single(target_cfg, label)
 
             # Create image and draw shapes
-            img = self.create_image(shapes)
+            img = self.create_image(new_shapes)
             imgs[i] = img
             labels[i] = label
             cfgs.append(new_cfg)
+            shapes.append(new_shapes)
 
-        return imgs, labels, target_cfg, cfgs
+        return imgs, labels, target_cfg, cfgs, shapes
 
     def generate_spatial(self, cfg, label):
         """
@@ -643,6 +669,9 @@ if __name__ == '__main__':
                         choices=['single', 'spatial'],
                         default='spatial',
                         help='What kind of images to generate')
+    parser.add_argument('--no_worlds',
+                        action='store_true',
+                        help='Don\'t save world JSONs')
     parser.add_argument('--vis',
                         action='store_true',
                         help='Sample visualization of train data to args.save_dir/vis')
@@ -684,69 +713,39 @@ if __name__ == '__main__':
 
     os.makedirs(args.save_dir, exist_ok=True)
 
-    train = msw.generate(args.n_train,
-                         n_images=args.n_images,
-                         min_correct=args.min_correct,
-                         p_correct=args.p_correct,
-                         n_correct=args.n_correct,
-                         workers=args.workers,
-                         configs=train_configs,
-                         verbose=True,
-                         desc='train')
-    train_file = os.path.join(args.save_dir, 'train.npz')
-    np.savez_compressed(train_file, **train)
+    dsets = [
+        ('train', args.n_train, train_configs),
+        ('val', args.n_val, val_configs),
+        ('test', args.n_test, test_configs),
+    ]
+    if args.gen_same:
+        dsets.extend([
+            ('val_same', args.n_val_same, train_configs),
+            ('test_same', args.n_test_same, train_configs),
+        ])
 
-    if args.n_val != 0:
-        val = msw.generate(args.n_val,
-                           n_images=args.n_images,
-                           min_correct=args.min_correct,
-                           p_correct=args.p_correct,
-                           n_correct=args.n_correct,
-                           workers=args.workers,
-                           configs=val_configs,
-                           verbose=True,
-                           desc='val')
-        val_file = os.path.join(args.save_dir, 'val.npz')
-        np.savez_compressed(val_file, **val)
+    train = None
+    for dname, n, cfgs in dsets:
+        if n > 0:
+            d, dworlds = msw.generate(n,
+                                      n_images=args.n_images,
+                                      min_correct=args.min_correct,
+                                      p_correct=args.p_correct,
+                                      n_correct=args.n_correct,
+                                      workers=args.workers,
+                                      configs=cfgs,
+                                      verbose=True,
+                                      desc=dname)
+            dfile = os.path.join(args.save_dir, f'{dname}.npz')
+            np.savez_compressed(dfile, **d)
+            if not args.no_worlds:
+                wfile = os.path.join(args.save_dir, f'{dname}_worlds.json')
+                with open(wfile, 'w') as f:
+                    json.dump(dworlds, f)
 
-    if args.n_test != 0:
-        test = msw.generate(args.n_test,
-                            n_images=args.n_images,
-                            min_correct=args.min_correct,
-                            p_correct=args.p_correct,
-                            n_correct=args.n_correct,
-                            workers=args.workers,
-                            configs=test_configs,
-                            verbose=True,
-                            desc='test')
-        test_file = os.path.join(args.save_dir, 'test.npz')
-        np.savez_compressed(test_file, **test)
-
-    if args.gen_same and args.n_val_same != 0:
-        val_same = msw.generate(args.n_val_same,
-                                n_images=args.n_images,
-                                min_correct=args.min_correct,
-                                p_correct=args.p_correct,
-                                n_correct=args.n_correct,
-                                workers=args.workers,
-                                configs=train_configs,  # same
-                                verbose=True,
-                                desc='val_same')
-        val_same_file = os.path.join(args.save_dir, 'val_same.npz')
-        np.savez_compressed(val_same_file, **val_same)
-
-    if args.gen_same and args.n_test_same != 0:
-        test_same = msw.generate(args.n_test_same,
-                                 n_images=args.n_images,
-                                 min_correct=args.min_correct,
-                                 p_correct=args.p_correct,
-                                 n_correct=args.n_correct,
-                                 workers=args.workers,
-                                 configs=train_configs,  # same
-                                 verbose=True,
-                                 desc='test_same')
-        test_same_file = os.path.join(args.save_dir, 'test_same.npz')
-        np.savez_compressed(test_same_file, **test_same)
+            if dname == 'train' and args.vis is not None:
+                # Save train for vis
+                train = d
 
     if args.vis is not None:
         vis_dir = os.path.join(args.save_dir, 'vis')

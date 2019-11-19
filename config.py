@@ -9,6 +9,11 @@ _SpatialConfigBase = namedtuple('SpatialConfig', ['shapes', 'relation', 'dir'])
 _SingleConfigBase = namedtuple('SingleConfig', ['shape', 'color'])
 
 
+class _ConfigBase:
+    def __str__(self):
+        return self.format(lang_type='standard')
+
+
 def a_or_an(s):
     """
     Return `a` or `an` depending on the first voewl sound of s. Dumb heuristic
@@ -42,7 +47,7 @@ def has_relation(d1, d2, relation, relation_dir):
             return d1.above(d2)
 
 
-class SpatialConfig(_SpatialConfigBase):
+class SpatialConfig(_ConfigBase, _SpatialConfigBase):
     def matches_shapes(self, shape_):
         """
         Return a list which contains 0 or 1 if the shape adheres to the match
@@ -126,11 +131,22 @@ class SpatialConfig(_SpatialConfigBase):
         parts = [s1_article, s1_0_txt, s1_1_txt, rel_txt, s2_article, s2_0_txt, s2_1_txt, period_txt]
         return ' '.join(s for s in parts if s != '')
 
-    def __str__(self):
-        return self.format(lang_type='standard')
+    def json(self):
+        return {
+            'type': 'spatial',
+            'shapes': [
+                {
+                    'color': s[0],
+                    'shape': s[1]
+                }
+                for s in self.shapes
+            ],
+            'relation': self.relation,
+            'relation_dir': self.dir,
+        }
 
 
-class SingleConfig(_SingleConfigBase):
+class SingleConfig(_ConfigBase, _SingleConfigBase):
     def format(self, lang_type):
         if lang_type not in ('standard', 'simple'):
             raise NotImplementedError(f"lang_type = {lang_type}")
@@ -151,6 +167,13 @@ class SingleConfig(_SingleConfigBase):
 
     def __str__(self):
         return self.format(lang_type='standard')
+
+    def json(self):
+        return {
+            'type': 'single',
+            'shape': self.shape,
+            'color': self.color
+        }
 
 
 class ShapeSpec(Enum):

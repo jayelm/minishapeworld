@@ -31,7 +31,8 @@ class Shape:
                  y=None,
                  relation=None,
                  relation_dir=None,
-                 color_=None):
+                 color_=None,
+                 max_rotation=90):
         if color_ is None:
             raise NotImplementedError("Must specify color")
         self.color = color_
@@ -65,6 +66,7 @@ class Shape:
                     self.y = random.randint(c.X_MIN, c.X_MAX_34)
                 else:
                     self.y = random.randint(c.X_MIN_34, c.X_MAX)
+        self.rotation = random.randint(max_rotation)
         self.init_shape()
 
     def draw(self, image):
@@ -95,6 +97,17 @@ class Shape:
     def __repr__(self):
         return self.__str__()
 
+    def json(self):
+        return {
+            'shape': self.name,
+            'color': self.color,
+            'pos': {
+                'x': self.x,
+                'y': self.y
+            },
+            'rotation': self.rotation
+        }
+
 
 class Ellipse(Shape):
     def init_shape(self, min_skew=1.5):
@@ -113,7 +126,7 @@ class Ellipse(Shape):
 
         shape_ = Point(self.x, self.y).buffer(1)
         shape_ = affinity.scale(shape_, self.dx, self.dy)
-        shape_ = affinity.rotate(shape_, random.randint(360))
+        shape_ = affinity.rotate(shape_, self.rotation)
         self.shape = shape_
 
         self.coords = np.round(np.array(self.shape.boundary).astype(np.int))
@@ -145,7 +158,7 @@ class Rectangle(Shape):
 
         shape_ = box(self.x, self.y, self.x + self.dx, self.y + self.dy)
         # Rotation
-        shape_ = affinity.rotate(shape_, random.randint(90))
+        shape_ = affinity.rotate(shape_, self.rotation)
         self.shape = shape_
 
         # Get coords
@@ -163,7 +176,7 @@ class Square(Rectangle):
         self.size = rand_size_2()
         shape_ = box(self.x, self.y, self.x + self.size, self.y + self.size)
         # Rotation
-        shape_ = affinity.rotate(shape_, random.randint(90))
+        shape_ = affinity.rotate(shape_, self.rotation)
         self.shape = shape_
 
         # Get coords
@@ -188,7 +201,7 @@ class Triangle(Shape):
             (self.x + self.size / 2, self.y - np.sqrt(3) * self.size / 6),
         ])
         # Rotation
-        shape_ = affinity.rotate(shape_, random.randint(90))
+        shape_ = affinity.rotate(shape_, self.rotation)
         self.shape = shape_
 
         self.coords = np.round(
