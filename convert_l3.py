@@ -31,13 +31,14 @@ if __name__ == '__main__':
         fname = os.path.join(args.dataset, f"{split}.npz")
         data = np.load(fname)
         # Positive examples: first 4
-        examples = data['imgs'][:, :4]
+        n_shot = data['imgs'].shape[1] - 1
+        examples = data['imgs'][:, :n_shot]
         examples = np.transpose(examples, (0, 1, 3, 4, 2))  # CHW -> HWC
         inputs = data['imgs'][:, -1]
         inputs = np.transpose(inputs, (0, 2, 3, 1))
         hints = preprocess_hints(data['langs'])
         labels = data['labels'][:, -1]
-        assert np.all(data['labels'][:, :4] == 1)
+        assert np.all(data['labels'][:, :n_shot] == 1)
 
         # Convert to floats
         examples = examples.astype(np.float32) / 255.0
