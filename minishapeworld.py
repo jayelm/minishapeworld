@@ -42,16 +42,11 @@ class MiniShapeWorld:
         if data_type not in ['concept', 'reference', 'caption']:
             raise NotImplementedError("data_type = {}".format(data_type))
 
-        self.data_type = data_type
-        self.img_type = img_type
         if img_type not in ['spatial', 'single']:
             raise NotImplementedError("img_type = {}".format(img_type))
-        # TODO: collapse generate_spatial/generate_single functions (there's
-        # overlap in code)
-        if img_type == 'spatial':
-            self.img_func = self.generate_spatial
-        elif img_type == 'single':
-            self.img_func = self.generate_single
+
+        self.data_type = data_type
+        self.img_type = img_type
 
         if colors is None:
             colors = color.COLORS
@@ -100,7 +95,8 @@ class MiniShapeWorld:
                  configs=None,
                  pool=None,
                  workers=0,
-                 verbose=False):
+                 verbose=False,
+                 desc=''):
         """
         Generate dataset
         :param n: number of examples to generate
@@ -133,23 +129,25 @@ class MiniShapeWorld:
         if n_correct is not None:
             assert 0 < n_correct <= n_images, f"n_correct ({n_correct}) must be > 0 and <= n_images ({n_images})"
 
-        all_imgs = np.zeros((n, n_images, 3, 64, 64), dtype=np.uint8)
+        all_imgs = np.zeros((n, n_images, 3, c.DIM, c.DIM), dtype=np.uint8)
         all_labels = np.zeros((n, n_images), dtype=np.uint8)
 
         mp_args = [(n_images, min_correct, correct, n_correct, configs, i) for i in range(n)]
 
         if do_mp:
-            gen_iter = pool.imap(self.img_func, mp_args)
+            gen_iter = pool.imap(self._generate_one_mp, mp_args)
         else:
-            gen_iter = map(self.img_func, mp_args)
+            gen_iter = map(self._generate_one_mp, mp_args)
         if verbose:
-            gen_iter = tqdm(gen_iter, total=n)
+            gen_iter = tqdm(gen_iter, total=n, desc=desc)
 
-        sampled_configs = []
-        for imgs, labels, cfg, i in gen_iter:
+        target_configs = []
+        all_configs = []
+        for imgs, labels, target_cfg, cfgs, i in gen_iter:
             all_imgs[i, ] = imgs
             all_labels[i, ] = labels
-            sampled_configs.append(cfg)
+            target_configs.append(target_cfg)
+            all_configs.append(cfgs)
 
         if do_mp and pool_was_none:  # Remember to close the pool
             pool.close()
@@ -158,7 +156,7 @@ class MiniShapeWorld:
         if float_type:
             all_imgs = np.divide(all_imgs, 255.0)
             all_labels = all_labels.astype(np.float32)
-        langs = np.array([str(c) for c in sampled_configs],
+        langs = np.array([str(c) for c in target_configs],
                          dtype=np.unicode)
 
         if self.data_type == 'caption':
@@ -168,19 +166,53 @@ class MiniShapeWorld:
 
         return {'imgs': all_imgs, 'labels': all_labels, 'langs': langs}
 
-    def generate_spatial(self, mp_args):
+    def _generate_one_mp(self, mp_args):
         """
-        Generate a single image
+        Wrapper around generate_one which accepts a tuple of args (and an index
+        i) for multiprocsesing purposes
+
+        mp_args is a tuple of (n_images, min_correct, correct, n_correct,
+        configs, i); see self.generate_one
         """
-        random.seed()
-        n_images, min_correct, correct, n_correct, configs, i = mp_args
-        imgs = np.zeros((n_images, 3, 64, 64), dtype=np.uint8)
+        *mp_args, i = mp_args
+        return self.generate_one(*mp_args) + (i, )
+
+    def generate_one(self, n_images, min_correct=None, p_correct=0.5, n_correct=None, configs=None):
+        """
+        Generate a single example
+
+        :param n_images: number of images in the example
+        :param min_correct: minimum number of targets correct; after targets
+            filled, will sample randomly. If None, defaults to minimum of 2
+            targets and 2 distractors
+        :param p_correct: probability of correct targets (after min_correct has
+            been filled)
+        :param n_correct: exact number of correct targets. If specified, will
+            sample exactly n_correct positive examples and (n_images -
+            n_correct) negative examples. This OVERRIDES min_correct and
+            p_correct behavior!
+        :param configs: optional list of configs to sample from. If None, then
+            just create randomly
+        :return images: an np.array of shape [n_images x 3 x c.DIM x c.DIM]
+            representing the images in NCHW format
+        :return labels: an np.array of shape [n_images] representing the
+            labels. *These are not shuffled*, and minimum/exact # of targets
+            will be first labels
+        :return config: The original config for the positive examples
+        """
+        random.seed()  # For multiprocessing (TODO: can we avoid this?)
+        imgs = np.zeros((n_images, 3, c.DIM, c.DIM), dtype=np.uint8)
         labels = np.zeros((n_images, ), dtype=np.uint8)
         if configs is not None:
             cfg_idx = random.choice(len(configs))
-            cfg = configs[cfg_idx]
+            target_cfg = configs[cfg_idx]
         else:
-            cfg = self.random_config_spatial()
+            # FIXME: Make this OOP to avoid these if statements
+            if self.img_type == 'spatial':
+                target_cfg = self.random_config_spatial()
+            elif self.img_type == 'single':
+                target_cfg = self.random_config_single()
+
         if self.data_type == 'concept':
             if n_correct is not None:
                 # Fixed number of targets and distractors
@@ -198,9 +230,9 @@ class MiniShapeWorld:
         else:
             n_target = 1
             n_distract = n_images  # Never run out of distractors
-        idx_rand = list(range(n_images))
 
-        for w_idx in idx_rand:
+        cfgs = []
+        for i in range(n_images):
             if n_target > 0:
                 label = 1
                 n_target -= 1
@@ -208,67 +240,82 @@ class MiniShapeWorld:
                 label = 0
                 n_distract -= 1
             else:
-                label = (random.random() < correct)
-            cfg_attempts = 0
-            while cfg_attempts < c.MAX_INVALIDATE_ATTEMPTS:
-                new_cfg = cfg if label else self.invalidate_spatial(cfg)
-                (ss1, ss2), relation, relation_dir = new_cfg
-                s2 = self.add_shape_from_spec(ss2, relation, relation_dir)
+                label = (random.random() < p_correct)
 
-                # Place second shape
-                attempts = 0
-                while attempts < c.MAX_PLACEMENT_ATTEMPTS:
-                    s1 = self.add_shape_rel(ss1, s2, relation, relation_dir)
-                    if not s2.intersects(s1):
-                        break
-                    attempts += 1
-                else:
-                    raise RuntimeError(
-                        "Could not place shape onto image without intersection")
-
-                if label:  # Positive example
-                    break
-                elif cfg.does_not_validate([s1], s2):
-                    break
-                else:
-                    # print(f"Shapes {[s1, s2]} for invalid config '{str(new_cfg)}' validates the original config '{str(cfg)}' (attempt {cfg_attempts})")
-                    assert True
-
-                cfg_attempts += 1
-
-            # Place distractor shapes
-            existing_shapes = [s1, s2]
-            n_dist = self.sample_n_distractor()
-            for _ in range(n_dist):
-                attempts = 0
-                while attempts < c.MAX_DISTRACTOR_PLACEMENT_ATTEMPTS:
-                    dss = self.sample_distractor(
-                        existing_shapes=existing_shapes)
-                    ds = self.add_shape(dss)
-                    # No intersections
-                    if not any(ds.intersects(s) for s in existing_shapes):
-                        if label:
-                            existing_shapes.append(ds)
-                            break
-                        else:
-                            # If this is a *negative* example, we should not have
-                            # the relation expressed by the original config
-                            if cfg.does_not_validate(existing_shapes, ds):
-                                existing_shapes.append(ds)
-                                break
-                            else:
-                                #  print(f"Adding new shape {ds} to existing shapes {existing_shapes} validates the original config {str(cfg)} (attempt {attempts})")
-                                assert True
-                    attempts += 1
-                else:
-                    raise RuntimeError("Could not place distractor onto "
-                                       "image without intersection")
+            if self.img_type == 'spatial':
+                new_cfg, shapes = self.generate_spatial(target_cfg, label)
+            elif self.img_type == 'single':
+                new_cfg, shapes = self.generate_single(target_cfg, label)
 
             # Create image and draw shapes
-            img = self.create_image(existing_shapes)
-            imgs[w_idx] = img
-            labels[w_idx] = label
-        return imgs, labels, cfg, i
+            img = self.create_image(shapes)
+            imgs[i] = img
+            labels[i] = label
+            cfgs.append(new_cfg)
+
+        return imgs, labels, target_cfg, cfgs
+
+    def generate_spatial(self, cfg, label):
+        """
+        Generate a single spatial relation according to the config,
+        invalidating it if the label is 0.
+        """
+        cfg_attempts = 0
+        while cfg_attempts < c.MAX_INVALIDATE_ATTEMPTS:
+            new_cfg = cfg if label else self.invalidate_spatial(cfg)
+            (ss1, ss2), relation, relation_dir = new_cfg
+            s2 = self.add_shape_from_spec(ss2, relation, relation_dir)
+
+            # Place second shape
+            attempts = 0
+            while attempts < c.MAX_PLACEMENT_ATTEMPTS:
+                s1 = self.add_shape_rel(ss1, s2, relation, relation_dir)
+                if not s2.intersects(s1):
+                    break
+                attempts += 1
+            else:
+                raise RuntimeError(
+                    "Could not place shape onto image without intersection")
+
+            if label:  # Positive example
+                break
+            elif cfg.does_not_validate([s1], s2):
+                break
+            else:
+                # print(f"Shapes {[s1, s2]} for invalid config '{str(new_cfg)}' validates the original config '{str(cfg)}' (attempt {cfg_attempts})")
+                assert True
+
+            cfg_attempts += 1
+
+        # Place distractor shapes
+        shapes = [s1, s2]
+        n_dist = self.sample_n_distractor()
+        for _ in range(n_dist):
+            attempts = 0
+            while attempts < c.MAX_DISTRACTOR_PLACEMENT_ATTEMPTS:
+                dss = self.sample_distractor(
+                    existing_shapes=shapes)
+                ds = self.add_shape(dss)
+                # No intersections
+                if not any(ds.intersects(s) for s in shapes):
+                    if label:
+                        shapes.append(ds)
+                        break
+                    else:
+                        # If this is a *negative* example, we should not have
+                        # the relation expressed by the original config
+                        if cfg.does_not_validate(shapes, ds):
+                            shapes.append(ds)
+                            break
+                        else:
+                            #  print(f"Adding new shape {ds} to existing shapes {shapes} validates the original config {str(cfg)} (attempt {attempts})")
+                            assert True
+                attempts += 1
+            else:
+                raise RuntimeError("Could not place distractor onto "
+                                   "image without intersection")
+
+        return new_cfg, shapes
 
     def invalidate_spatial(self, cfg):
         # Invalidate by randomly choosing one property to change:
@@ -313,47 +360,17 @@ class MiniShapeWorld:
             raise RuntimeError
         return config.SpatialConfig(*inv_cfg)
 
-    def generate_single(self, mp_args):
-        random.seed()
-        n_images, min_correct, correct, n_correct, configs, i = mp_args
-        imgs = np.zeros((n_images, 3, 64, 64), dtype=np.uint8)
-        labels = np.zeros((n_images, ), dtype=np.uint8)
-        if configs is not None:
-            cfg_idx = random.choice(len(configs))
-            cfg = configs[cfg_idx]
-        else:
-            cfg = self.random_config_single()
-        if self.data_type == 'concept':
-            n_target = 2
-            n_distract = 2
-        else:
-            n_target = 1
-            n_distract = n_images  # Never run out of distractors
-        idx_rand = list(range(n_images))
-        # random.shuffle(idx_rand)
-        for w_idx in idx_rand:
-            if n_target > 0:
-                label = 1
-                n_target -= 1
-            elif n_distract > 0:
-                label = 0
-                n_distract -= 1
-            else:
-                label = (random.random() < correct)
-            new_cfg = cfg if label else self.invalidate_single(cfg)
+    def generate_single(self, cfg, label):
+        new_cfg = cfg if label else self.invalidate_single(cfg)
 
-            color_, shape_ = new_cfg
-            if shape_ is None:
-                shape_ = self.random_shape()
-            if color_ is None:
-                color_ = self.random_color()
-            s = shape.SHAPE_IMPLS[shape_](color_=color_)
+        color_, shape_ = new_cfg
+        if shape_ is None:
+            shape_ = self.random_shape()
+        if color_ is None:
+            color_ = self.random_color()
+        s = shape.SHAPE_IMPLS[shape_](color_=color_)
 
-            # Create image and draw shape
-            img = self.create_image([s])
-            imgs[w_idx] = img
-            labels[w_idx] = label
-        return imgs, labels, cfg, i
+        return [s], new_cfg
 
     def create_image(self, shapes):
         """
@@ -666,7 +683,8 @@ if __name__ == '__main__':
                          n_correct=args.n_correct,
                          workers=args.workers,
                          configs=train_configs,
-                         verbose=True)
+                         verbose=True,
+                         desc='train')
     train_file = os.path.join(args.save_dir, 'train.npz')
     np.savez_compressed(train_file, **train)
 
@@ -678,7 +696,8 @@ if __name__ == '__main__':
                            n_correct=args.n_correct,
                            workers=args.workers,
                            configs=val_configs,
-                           verbose=True)
+                           verbose=True,
+                           desc='val')
         val_file = os.path.join(args.save_dir, 'val.npz')
         np.savez_compressed(val_file, **val)
 
@@ -690,7 +709,8 @@ if __name__ == '__main__':
                             n_correct=args.n_correct,
                             workers=args.workers,
                             configs=test_configs,
-                            verbose=True)
+                            verbose=True,
+                            desc='test')
         test_file = os.path.join(args.save_dir, 'test.npz')
         np.savez_compressed(test_file, **test)
 
@@ -702,7 +722,8 @@ if __name__ == '__main__':
                                 n_correct=args.n_correct,
                                 workers=args.workers,
                                 configs=train_configs,  # same
-                                verbose=True)
+                                verbose=True,
+                                desc='val_same')
         val_same_file = os.path.join(args.save_dir, 'val_same.npz')
         np.savez_compressed(val_same_file, **val_same)
 
@@ -714,7 +735,8 @@ if __name__ == '__main__':
                                  n_correct=args.n_correct,
                                  workers=args.workers,
                                  configs=train_configs,  # same
-                                 verbose=True)
+                                 verbose=True,
+                                 desc='test_same')
         test_same_file = os.path.join(args.save_dir, 'test_same.npz')
         np.savez_compressed(test_same_file, **test_same)
 
