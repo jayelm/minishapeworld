@@ -265,10 +265,8 @@ class MiniShapeWorld:
                                        "image without intersection")
 
             # Create image and draw shapes
-            img = image.IMG()
-            img.draw_shapes(existing_shapes)
-            # Use NCHW for pytorch
-            imgs[w_idx] = np.transpose(img.array(), (2, 0, 1))
+            img = self.create_image(existing_shapes)
+            imgs[w_idx] = img
             labels[w_idx] = label
         return imgs, labels, cfg, i
 
@@ -352,11 +350,22 @@ class MiniShapeWorld:
             s = shape.SHAPE_IMPLS[shape_](color_=color_)
 
             # Create image and draw shape
-            img = image.IMG()
-            img.draw_shapes([s])
-            imgs[w_idx] = np.transpose(img.array(), (2, 0, 1))
+            img = self.create_image([s])
+            imgs[w_idx] = img
             labels[w_idx] = label
         return imgs, labels, cfg, i
+
+    def create_image(self, shapes):
+        """
+        Create an image and place shapes onto it.
+
+        :param shapes: list[shape.Shape]
+        :returns: np.array in NCHW format
+        """
+        img = image.IMG()
+        img.draw_shapes(shapes)
+        img = np.transpose(img.array(), (2, 0, 1))
+        return img
 
     def invalidate_single(self, cfg):
         color_, shape_ = cfg
