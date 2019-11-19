@@ -50,6 +50,7 @@ def visualize(img_dir, data, n=100):
     for example_i, (example, labels, lang) in enumerate(data_arr):
         if len(example.shape) == 3:
             # Caption dataset
+            example = np.transpose(example, (1, 2, 0))
             Image.fromarray(example).save(
                 os.path.join(img_dir, '{}.png'.format(example_i)))
         else:
