@@ -426,19 +426,19 @@ class MiniShapeWorld:
             # invalidate both
             part_to_invalidate = random.randint(3)
             if part_to_invalidate == 0:
-                return (self.new_color(color_), shape_)
+                return config.SingleConfig(self.new_color(color_), shape_)
             elif part_to_invalidate == 1:
-                return (color_, self.new_shape(shape_))
+                return config.SingleConfig(color_, self.new_shape(shape_))
             elif part_to_invalidate == 2:
-                return (self.new_color(color_), self.new_shape(shape_))
+                return config.SingleConfig(self.new_color(color_), self.new_shape(shape_))
             else:
                 raise RuntimeError
         elif shape_ is not None:
             assert color_ is None
-            return (None, self.new_shape(shape_))
+            return config.SingleConfig(None, self.new_shape(shape_))
         elif color_ is not None:
             assert shape_ is None
-            return (self.new_color(color_), None)
+            return config.SingleConfig(self.new_color(color_), None)
         else:
             raise RuntimeError
 
