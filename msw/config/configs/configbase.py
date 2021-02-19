@@ -1,14 +1,15 @@
-import numpy as np
 import abc
 
+import numpy as np
 
-from ... import shape, color
+from ... import color
 from ... import constants as C
+from ... import shape
 
 
 class _ConfigBase:
     @abc.abstractmethod
-    def format(self, lang_type='standard'):
+    def format(self, lang_type="standard"):
         return ""
 
     @abc.abstractmethod
@@ -28,11 +29,10 @@ class _ConfigBase:
         return
 
     def __str__(self):
-        return self.format(lang_type='standard')
+        return self.format(lang_type="standard")
 
     def sample_distractor(self, existing_shapes=()):
-        d = (color.random(),
-             shape.random())
+        d = (color.random(), shape.random())
         if d in existing_shapes:
             return self.sample_distractor(existing_shapes=existing_shapes)
         return d
@@ -48,25 +48,21 @@ class _ConfigBase:
 
     def sample_n_distractor(self, n_distractors):
         if isinstance(n_distractors, tuple):
-            n_dist = np.random.randint(n_distractors[0],
-                                       n_distractors[1] + 1)  # Exclusive range
+            n_dist = np.random.randint(
+                n_distractors[0], n_distractors[1] + 1
+            )  # Exclusive range
         else:
             n_dist = n_distractors
         return n_dist
 
-    def world_json(self, shapes, lang_type='standard'):
+    def world_json(self, shapes, lang_type="standard"):
         return {
-            'lang': self.format(lang_type=lang_type),
-            'config': self.json(),
-            'shapes': [s.json() for s in shapes]
+            "lang": self.format(lang_type=lang_type),
+            "config": self.json(),
+            "shapes": [s.json() for s in shapes],
         }
 
-    def add_shape_from_spec(self,
-                            spec,
-                            relation,
-                            relation_dir,
-                            shapes=None,
-                            attempt=1):
+    def add_shape_from_spec(self, spec, relation, relation_dir, shapes=None, attempt=1):
         if attempt > C.MAX_PLACEMENT_ATTEMPTS:
             return None
         color_, shape_ = spec
@@ -74,17 +70,15 @@ class _ConfigBase:
             shape_ = shape.random()
         if color_ is None:
             color_ = color.random()
-        s = shape.SHAPE_IMPLS[shape_](relation=relation,
-                                      relation_dir=relation_dir,
-                                      color_=color_)
+        s = shape.SHAPE_IMPLS[shape_](
+            relation=relation, relation_dir=relation_dir, color_=color_
+        )
         if shapes is not None:
             for oth in shapes:
                 if s.intersects(oth):
-                    return self.add_shape_from_spec(spec,
-                                                    relation,
-                                                    relation_dir,
-                                                    shapes=shapes,
-                                                    attempt=attempt + 1)
+                    return self.add_shape_from_spec(
+                        spec, relation, relation_dir, shapes=shapes, attempt=attempt + 1
+                    )
             shapes.append(s)
             return s
         return s

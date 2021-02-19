@@ -1,22 +1,24 @@
-import numpy as np
-from tqdm import tqdm
 import multiprocessing as mp
 
+import numpy as np
+from tqdm import tqdm
 
-from . import config, shape, color
+from . import color, config
 from . import constants as C
-from . import image
+from . import image, shape
 
 
 class ShapeWorld:
-    def __init__(self,
-                 data_type='concept',
-                 config=config.SingleConfig,
-                 colors=None,
-                 shapes=None,
-                 n_distractors=0,
-                 unique_distractors=True,
-                 unrestricted_distractors=True):
+    def __init__(
+        self,
+        data_type="concept",
+        config=config.SingleConfig,
+        colors=None,
+        shapes=None,
+        n_distractors=0,
+        unique_distractors=True,
+        unrestricted_distractors=True,
+    ):
         """
 
         :param data_type: one of 'concept', 'reference' or 'caption'
@@ -31,7 +33,7 @@ class ShapeWorld:
         :param unrestricted_distractors: sample distractor colors/shapes freely
             from colors
         """
-        if data_type not in ['concept', 'reference', 'caption']:
+        if data_type not in ["concept", "reference", "caption"]:
             raise NotImplementedError("data_type = {}".format(data_type))
 
         self.data_type = data_type
@@ -70,19 +72,21 @@ class ShapeWorld:
 
         return list(total_configs)
 
-    def generate(self,
-                 n,
-                 n_images=10,
-                 min_correct=None,
-                 p_correct=0.5,
-                 n_correct=None,
-                 float_type=False,
-                 configs=None,
-                 lang_type='standard',
-                 pool=None,
-                 workers=0,
-                 verbose=False,
-                 desc=''):
+    def generate(
+        self,
+        n,
+        n_images=10,
+        min_correct=None,
+        p_correct=0.5,
+        n_correct=None,
+        float_type=False,
+        configs=None,
+        lang_type="standard",
+        pool=None,
+        workers=0,
+        verbose=False,
+        desc="",
+    ):
         """
         Generate dataset
         :param n: number of examples to generate
@@ -114,23 +118,27 @@ class ShapeWorld:
             if pool is None:
                 pool_was_none = True
                 pool = mp.Pool(workers)
-        if lang_type not in ['standard', 'simple']:
+        if lang_type not in ["standard", "simple"]:
             raise NotImplementedError(f"lang_type = {lang_type}")
 
-        if self.data_type == 'concept':
+        if self.data_type == "concept":
             assert n_images > 4, "Too few n_images"
-        elif self.data_type == 'reference':
+        elif self.data_type == "reference":
             assert n_images > 1, "Too few n_images"
-        elif self.data_type == 'caption':
+        elif self.data_type == "caption":
             n_images = 1
 
         if n_correct is not None:
-            assert 0 < n_correct <= n_images, f"n_correct ({n_correct}) must be > 0 and <= n_images ({n_images})"
+            assert (
+                0 < n_correct <= n_images
+            ), f"n_correct ({n_correct}) must be > 0 and <= n_images ({n_images})"
 
         all_imgs = np.zeros((n, n_images, 3, C.DIM, C.DIM), dtype=np.uint8)
         all_labels = np.zeros((n, n_images), dtype=np.uint8)
 
-        mp_args = [(n_images, min_correct, p_correct, n_correct, configs, i) for i in range(n)]
+        mp_args = [
+            (n_images, min_correct, p_correct, n_correct, configs, i) for i in range(n)
+        ]
 
         if do_mp:
             gen_iter = pool.imap(self._generate_one_mp, mp_args)
@@ -143,12 +151,12 @@ class ShapeWorld:
         all_configs = []
         world_jsons = []
         for imgs, labels, target_cfg, cfgs, shapes, i in gen_iter:
-            all_imgs[i, ] = imgs
-            all_labels[i, ] = labels
+            all_imgs[i,] = imgs
+            all_labels[i,] = labels
             target_configs.append(target_cfg)
             all_configs.append(cfgs)
             wjsons = [cfg.world_json(s) for cfg, s in zip(cfgs, shapes)]
-            if self.data_type == 'caption':
+            if self.data_type == "caption":
                 # No multiple images per example
                 wjsons = wjsons[0]
             world_jsons.append(wjsons)
@@ -160,19 +168,17 @@ class ShapeWorld:
         if float_type:
             all_imgs = np.divide(all_imgs, 255.0)
             all_labels = all_labels.astype(np.float32)
-        langs = np.array([cfg.format(lang_type=lang_type) for cfg in target_configs],
-                         dtype=np.unicode)
+        langs = np.array(
+            [cfg.format(lang_type=lang_type) for cfg in target_configs],
+            dtype=np.unicode,
+        )
 
-        if self.data_type == 'caption':
+        if self.data_type == "caption":
             # Squeeze out the images per example dim
             all_imgs = all_imgs.squeeze(1)
             all_labels = all_labels.squeeze(1)
 
-        return {
-            'imgs': all_imgs,
-            'labels': all_labels,
-            'langs': langs,
-        }, world_jsons
+        return {"imgs": all_imgs, "labels": all_labels, "langs": langs,}, world_jsons
 
     def _generate_one_mp(self, mp_args):
         """
@@ -183,9 +189,11 @@ class ShapeWorld:
         configs, i); see self.generate_one
         """
         *mp_args, i = mp_args
-        return self.generate_one(*mp_args) + (i, )
+        return self.generate_one(*mp_args) + (i,)
 
-    def generate_one(self, n_images, min_correct=None, p_correct=0.5, n_correct=None, configs=None):
+    def generate_one(
+        self, n_images, min_correct=None, p_correct=0.5, n_correct=None, configs=None
+    ):
         """
         Generate a single example
 
@@ -210,14 +218,14 @@ class ShapeWorld:
         """
         np.random.seed()  # For multiprocessing (TODO: can we avoid this?)
         imgs = np.zeros((n_images, 3, C.DIM, C.DIM), dtype=np.uint8)
-        labels = np.zeros((n_images, ), dtype=np.uint8)
+        labels = np.zeros((n_images,), dtype=np.uint8)
         if configs is not None:
             cfg_idx = np.random.choice(len(configs))
             target_cfg = configs[cfg_idx]
         else:
             target_cfg = self.config.random()
 
-        if self.data_type == 'concept':
+        if self.data_type == "concept":
             if n_correct is not None:
                 # Fixed number of targets and distractors
                 n_target = n_correct
@@ -245,7 +253,7 @@ class ShapeWorld:
                 label = 0
                 n_distract -= 1
             else:
-                label = (np.random.random() < p_correct)
+                label = np.random.random() < p_correct
 
             new_cfg, new_shapes = target_cfg.instantiate(label)
 

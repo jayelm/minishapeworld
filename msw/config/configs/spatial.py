@@ -1,15 +1,15 @@
 from collections import namedtuple
+
 import numpy as np
 
-from . import configbase
-
+from ... import color
+from ... import constants as C
+from ... import shape
 from .. import spec
 from .. import util as config_util
+from . import configbase
 
-from ... import shape, color
-from ... import constants as C
-
-_SpatialConfigBase = namedtuple('SpatialConfig', ['shapes', 'relation', 'dir'])
+_SpatialConfigBase = namedtuple("SpatialConfig", ["shapes", "relation", "dir"])
 
 
 def matches(spc, shape_):
@@ -67,71 +67,74 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
                         return False
         return True
 
-    def format(self, lang_type='standard'):
-        if lang_type not in ('standard', 'simple'):
+    def format(self, lang_type="standard"):
+        if lang_type not in ("standard", "simple"):
             raise NotImplementedError(f"lang_type = {lang_type}")
         (s1, s2), relation, relation_dir = self
         if relation == 0:
             if relation_dir == 0:
-                if lang_type == 'standard':
-                    rel_txt = 'is to the left of'
+                if lang_type == "standard":
+                    rel_txt = "is to the left of"
                 else:
-                    rel_txt = 'left'
+                    rel_txt = "left"
             else:
-                if lang_type == 'standard':
-                    rel_txt = 'is to the right of'
+                if lang_type == "standard":
+                    rel_txt = "is to the right of"
                 else:
-                    rel_txt = 'right'
+                    rel_txt = "right"
         else:
             if relation_dir == 0:
-                if lang_type == 'standard':
-                    rel_txt = 'is below'
+                if lang_type == "standard":
+                    rel_txt = "is below"
                 else:
-                    rel_txt = 'below'
+                    rel_txt = "below"
             else:
-                if lang_type == 'standard':
-                    rel_txt = 'is above'
+                if lang_type == "standard":
+                    rel_txt = "is above"
                 else:
-                    rel_txt = 'above'
+                    rel_txt = "above"
         if s1[0] is None:
-            s1_0_txt = ''
+            s1_0_txt = ""
         else:
             s1_0_txt = s1[0]
         if s1[1] is None:
-            s1_1_txt = 'shape'
+            s1_1_txt = "shape"
         else:
             s1_1_txt = s1[1]
         if s2[0] is None:
-            s2_0_txt = ''
+            s2_0_txt = ""
         else:
             s2_0_txt = s2[0]
         if s2[1] is None:
-            s2_1_txt = 'shape'
+            s2_1_txt = "shape"
         else:
             s2_1_txt = s2[1]
-        if lang_type == 'standard':
+        if lang_type == "standard":
             s1_article = config_util.a_or_an(s1_0_txt + s1_1_txt)
             s2_article = config_util.a_or_an(s2_0_txt + s2_1_txt)
-            period_txt = '.'
+            period_txt = "."
         else:
-            s1_article = ''
-            s2_article = ''
-            period_txt = ''
-        parts = [s1_article, s1_0_txt, s1_1_txt, rel_txt, s2_article, s2_0_txt, s2_1_txt, period_txt]
-        return ' '.join(s for s in parts if s != '')
+            s1_article = ""
+            s2_article = ""
+            period_txt = ""
+        parts = [
+            s1_article,
+            s1_0_txt,
+            s1_1_txt,
+            rel_txt,
+            s2_article,
+            s2_0_txt,
+            s2_1_txt,
+            period_txt,
+        ]
+        return " ".join(s for s in parts if s != "")
 
     def json(self):
         return {
-            'type': 'spatial',
-            'shapes': [
-                {
-                    'color': s[0],
-                    'shape': s[1]
-                }
-                for s in self.shapes
-            ],
-            'relation': self.relation,
-            'relation_dir': self.dir,
+            "type": "spatial",
+            "shapes": [{"color": s[0], "shape": s[1]} for s in self.shapes],
+            "relation": self.relation,
+            "relation_dir": self.dir,
         }
 
     @classmethod
@@ -151,8 +154,11 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
 
     def invalidate(self):
         # Invalidate by randomly choosing one property to change:
-        ((shape_1_color, shape_1_shape),
-         (shape_2_color, shape_2_shape)), relation, relation_dir = self
+        (
+            ((shape_1_color, shape_1_shape), (shape_2_color, shape_2_shape)),
+            relation,
+            relation_dir,
+        ) = self
         properties = []
         if shape_1_color is not None:
             properties.append(spec.ConfigProps.SHAPE_1_COLOR)
@@ -171,27 +177,50 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
         invalid_prop = np.random.choice(properties)
 
         if invalid_prop == spec.ConfigProps.SHAPE_1_COLOR:
-            inv_cfg = ((color.new_color(shape_1_color), shape_1_shape),
-                       (shape_2_color, shape_2_shape)), relation, relation_dir
+            inv_cfg = (
+                (
+                    (color.new_color(shape_1_color), shape_1_shape),
+                    (shape_2_color, shape_2_shape),
+                ),
+                relation,
+                relation_dir,
+            )
         elif invalid_prop == spec.ConfigProps.SHAPE_1_SHAPE:
-            inv_cfg = ((shape_1_color, shape.new_shape(shape_1_shape)),
-                       (shape_2_color, shape_2_shape)), relation, relation_dir
+            inv_cfg = (
+                (
+                    (shape_1_color, shape.new_shape(shape_1_shape)),
+                    (shape_2_color, shape_2_shape),
+                ),
+                relation,
+                relation_dir,
+            )
         elif invalid_prop == spec.ConfigProps.SHAPE_2_COLOR:
-            inv_cfg = ((shape_1_color, shape_1_shape),
-                       (color.new_color(shape_2_color),
-                        shape_2_shape)), relation, relation_dir
+            inv_cfg = (
+                (
+                    (shape_1_color, shape_1_shape),
+                    (color.new_color(shape_2_color), shape_2_shape),
+                ),
+                relation,
+                relation_dir,
+            )
         elif invalid_prop == spec.ConfigProps.SHAPE_2_SHAPE:
-            inv_cfg = ((shape_1_color, shape_1_shape),
-                       (shape_2_color,
-                        shape.new_shape(shape_2_shape))), relation, relation_dir
+            inv_cfg = (
+                (
+                    (shape_1_color, shape_1_shape),
+                    (shape_2_color, shape.new_shape(shape_2_shape)),
+                ),
+                relation,
+                relation_dir,
+            )
         elif invalid_prop == spec.ConfigProps.RELATION_DIR:
-            inv_cfg = ((shape_1_color, shape_1_shape),
-                       (shape_2_color,
-                        shape_2_shape)), relation, 1 - relation_dir
+            inv_cfg = (
+                ((shape_1_color, shape_1_shape), (shape_2_color, shape_2_shape)),
+                relation,
+                1 - relation_dir,
+            )
         else:
             raise RuntimeError
         return type(self)(*inv_cfg)
-
 
     def instantiate(self, label, n_distractors=0):
         """
@@ -213,7 +242,8 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
                 attempts += 1
             else:
                 raise RuntimeError(
-                    "Could not place shape onto image without intersection")
+                    "Could not place shape onto image without intersection"
+                )
 
             if label:  # Positive example
                 break
@@ -228,8 +258,7 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
         for _ in range(n_dist):
             attempts = 0
             while attempts < C.MAX_DISTRACTOR_PLACEMENT_ATTEMPTS:
-                dss = self.sample_distractor(
-                    existing_shapes=shapes)
+                dss = self.sample_distractor(existing_shapes=shapes)
                 ds = self.add_shape(dss)
                 # No intersections
                 if not any(ds.intersects(s) for s in shapes):
@@ -244,8 +273,9 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
                             break
                 attempts += 1
             else:
-                raise RuntimeError("Could not place distractor onto "
-                                   "image without intersection")
+                raise RuntimeError(
+                    "Could not place distractor onto " "image without intersection"
+                )
 
         return new_cfg, shapes
 

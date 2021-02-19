@@ -1,8 +1,8 @@
 from enum import Enum
+
 import numpy as np
 
-
-from .. import shape, color
+from .. import color, shape
 
 
 class ShapeSpec(Enum):
@@ -33,5 +33,6 @@ class ConfigProps(Enum):
     SHAPE_2_COLOR = 2
     SHAPE_2_SHAPE = 3
     RELATION_DIR = 4
+
 
 SHAPE_SPECS = list(ShapeSpec)

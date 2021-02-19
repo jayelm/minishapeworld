@@ -1,7 +1,7 @@
 import aggdraw
 import numpy as np
 
-COLORS = ['red', 'blue', 'green', 'yellow', 'white', 'gray']
+COLORS = ["red", "blue", "green", "yellow", "white", "gray"]
 BRUSHES = {c: aggdraw.Brush(c) for c in COLORS}
 PENS = {c: aggdraw.Pen(c) for c in COLORS}
 

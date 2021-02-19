@@ -3,12 +3,11 @@ Shape implementations
 """
 
 import numpy as np
+from shapely import affinity
+from shapely.geometry import Point, Polygon, box
 
 from . import color
 from . import constants as C
-
-from shapely import affinity
-from shapely.geometry import Point, box, Polygon
 
 
 def rand_size():
@@ -25,13 +24,15 @@ def rand_pos():
 
 
 class Shape:
-    def __init__(self,
-                 x=None,
-                 y=None,
-                 relation=None,
-                 relation_dir=None,
-                 color_=None,
-                 max_rotation=90):
+    def __init__(
+        self,
+        x=None,
+        y=None,
+        relation=None,
+        relation_dir=None,
+        color_=None,
+        max_rotation=90,
+    ):
         if color_ is None:
             raise NotImplementedError("Must specify color")
         self.color = color_
@@ -98,13 +99,10 @@ class Shape:
 
     def json(self):
         return {
-            'shape': self.name,
-            'color': self.color,
-            'pos': {
-                'x': self.x,
-                'y': self.y
-            },
-            'rotation': self.rotation
+            "shape": self.name,
+            "color": self.color,
+            "pos": {"x": self.x, "y": self.y},
+            "rotation": self.rotation,
         }
 
 
@@ -115,7 +113,7 @@ class Ellipse(Shape):
         bigger = int(self.dx * min_skew)
         if bigger >= C.SIZE_MAX:
             smaller = int(self.dx / min_skew)
-            assert smaller > C.SIZE_MIN, ("{} {}".format(smaller, self.dx))
+            assert smaller > C.SIZE_MIN, "{} {}".format(smaller, self.dx)
             self.dy = np.random.randint(C.SIZE_MIN, smaller)
         else:
             self.dy = np.random.randint(bigger, C.SIZE_MAX)
@@ -161,13 +159,16 @@ class Rectangle(Shape):
         self.shape = shape_
 
         # Get coords
-        self.coords = np.round(
-            np.array(self.shape.exterior.coords)[:-1].flatten()).astype(
-                np.int).tolist()
+        self.coords = (
+            np.round(np.array(self.shape.exterior.coords)[:-1].flatten())
+            .astype(np.int)
+            .tolist()
+        )
 
     def draw(self, image):
-        image.draw.polygon(self.coords, color.BRUSHES[self.color],
-                           color.PENS[self.color])
+        image.draw.polygon(
+            self.coords, color.BRUSHES[self.color], color.PENS[self.color]
+        )
 
 
 class Square(Rectangle):
@@ -179,9 +180,11 @@ class Square(Rectangle):
         self.shape = shape_
 
         # Get coords
-        self.coords = np.round(
-            np.array(self.shape.exterior.coords)[:-1].flatten()).astype(
-                np.int).tolist()
+        self.coords = (
+            np.round(np.array(self.shape.exterior.coords)[:-1].flatten())
+            .astype(np.int)
+            .tolist()
+        )
 
 
 class Triangle(Shape):
@@ -194,22 +197,27 @@ class Triangle(Shape):
         # X and Y are the center of the shape and size is the length of one
         # side. Assume one point lies directly above the center. Then:
         # https://math.stackexchange.com/questions/1344690/is-it-possible-to-find-the-vertices-of-an-equilateral-triangle-given-its-center
-        shape_ = Polygon([
-            (self.x, self.y + np.sqrt(3) * self.size / 3),
-            (self.x - self.size / 2, self.y - np.sqrt(3) * self.size / 6),
-            (self.x + self.size / 2, self.y - np.sqrt(3) * self.size / 6),
-        ])
+        shape_ = Polygon(
+            [
+                (self.x, self.y + np.sqrt(3) * self.size / 3),
+                (self.x - self.size / 2, self.y - np.sqrt(3) * self.size / 6),
+                (self.x + self.size / 2, self.y - np.sqrt(3) * self.size / 6),
+            ]
+        )
         # Rotation
         shape_ = affinity.rotate(shape_, self.rotation)
         self.shape = shape_
 
-        self.coords = np.round(
-            np.array(self.shape.exterior.coords)[:-1].flatten()).astype(
-                np.int).tolist()
+        self.coords = (
+            np.round(np.array(self.shape.exterior.coords)[:-1].flatten())
+            .astype(np.int)
+            .tolist()
+        )
 
     def draw(self, image):
-        image.draw.polygon(self.coords, color.BRUSHES[self.color],
-                           color.PENS[self.color])
+        image.draw.polygon(
+            self.coords, color.BRUSHES[self.color], color.PENS[self.color]
+        )
 
 
 def random(shapes=None):
@@ -230,12 +238,12 @@ def new_shape(existing_shape, shapes=None):
     return new_s
 
 
-SHAPES = ['circle', 'square', 'rectangle', 'ellipse', 'triangle']
+SHAPES = ["circle", "square", "rectangle", "ellipse", "triangle"]
 SHAPE_IMPLS = {
-    'circle': Circle,
-    'ellipse': Ellipse,
-    'square': Square,
-    'rectangle': Rectangle,
-    'triangle': Triangle
+    "circle": Circle,
+    "ellipse": Ellipse,
+    "square": Square,
+    "rectangle": Rectangle,
+    "triangle": Triangle
     # TODO: semicircle
 }
