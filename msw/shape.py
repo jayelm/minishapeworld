@@ -3,26 +3,25 @@ Shape implementations
 """
 
 import numpy as np
-from numpy import random
 
-import color
-import constants as c
+from . import color
+from . import constants as C
 
 from shapely import affinity
 from shapely.geometry import Point, box, Polygon
 
 
 def rand_size():
-    return random.randint(c.SIZE_MIN, c.SIZE_MAX)
+    return np.random.randint(C.SIZE_MIN, C.SIZE_MAX)
 
 
 def rand_size_2():
     """Slightly bigger."""
-    return random.randint(c.SIZE_MIN + 2, c.SIZE_MAX + 2)
+    return np.random.randint(C.SIZE_MIN + 2, C.SIZE_MAX + 2)
 
 
 def rand_pos():
-    return random.randint(c.X_MIN, c.X_MAX)
+    return np.random.randint(C.X_MIN, C.X_MAX)
 
 
 class Shape:
@@ -52,10 +51,10 @@ class Shape:
                 if relation_dir == 0:
                     # Place right 3/4 of screen, so second shape
                     # can be placed LEFT
-                    self.x = random.randint(c.X_MIN_34, c.X_MAX)
+                    self.x = np.random.randint(C.X_MIN_34, C.X_MAX)
                 else:
                     # Place left 3/4
-                    self.x = random.randint(c.X_MIN, c.X_MAX_34)
+                    self.x = np.random.randint(C.X_MIN, C.X_MAX_34)
             else:
                 # y matters - x is totally random
                 self.x = rand_pos()
@@ -63,10 +62,10 @@ class Shape:
                     # Place top 3/4 of screen, so second shape can be placed
                     # BELOW
                     # NOTE: Remember coords for y travel in opp dir
-                    self.y = random.randint(c.X_MIN, c.X_MAX_34)
+                    self.y = np.random.randint(C.X_MIN, C.X_MAX_34)
                 else:
-                    self.y = random.randint(c.X_MIN_34, c.X_MAX)
-        self.rotation = random.randint(max_rotation)
+                    self.y = np.random.randint(C.X_MIN_34, C.X_MAX)
+        self.rotation = np.random.randint(max_rotation)
         self.init_shape()
 
     def draw(self, image):
@@ -114,13 +113,13 @@ class Ellipse(Shape):
         self.dx = rand_size()
         # Dy must be at least 1.6x dx, to remove ambiguity with circle
         bigger = int(self.dx * min_skew)
-        if bigger >= c.SIZE_MAX:
+        if bigger >= C.SIZE_MAX:
             smaller = int(self.dx / min_skew)
-            assert smaller > c.SIZE_MIN, ("{} {}".format(smaller, self.dx))
-            self.dy = random.randint(c.SIZE_MIN, smaller)
+            assert smaller > C.SIZE_MIN, ("{} {}".format(smaller, self.dx))
+            self.dy = np.random.randint(C.SIZE_MIN, smaller)
         else:
-            self.dy = random.randint(bigger, c.SIZE_MAX)
-        if random.random() < 0.5:
+            self.dy = np.random.randint(bigger, C.SIZE_MAX)
+        if np.random.random() < 0.5:
             # Switch dx, dy
             self.dx, self.dy = self.dy, self.dx
 
@@ -147,12 +146,12 @@ class Rectangle(Shape):
     def init_shape(self, min_skew=1.5):
         self.dx = rand_size_2()
         bigger = int(self.dx * min_skew)
-        if bigger >= c.SIZE_MAX:
+        if bigger >= C.SIZE_MAX:
             smaller = int(self.dx / min_skew)
-            self.dy = random.randint(c.SIZE_MIN, smaller)
+            self.dy = np.random.randint(C.SIZE_MIN, smaller)
         else:
-            self.dy = random.randint(bigger, c.SIZE_MAX)
-        if random.random() < 0.5:
+            self.dy = np.random.randint(bigger, C.SIZE_MAX)
+        if np.random.random() < 0.5:
             # Switch dx, dy
             self.dx, self.dy = self.dy, self.dx
 
@@ -211,6 +210,24 @@ class Triangle(Shape):
     def draw(self, image):
         image.draw.polygon(self.coords, color.BRUSHES[self.color],
                            color.PENS[self.color])
+
+
+def random(shapes=None):
+    if shapes is None:
+        return np.random.choice(SHAPES)
+    else:
+        return np.random.choice(shapes)
+
+
+def new_shape(existing_shape, shapes=None):
+    if shapes is None:
+        shapes = SHAPES
+    if len(shapes) == 1 and shapes[0] == existing_shape:
+        raise RuntimeError("No additional shapes to generate")
+    new_s = existing_shape
+    while new_s == existing_shape:
+        new_s = np.random.choice(shapes)
+    return new_s
 
 
 SHAPES = ['circle', 'square', 'rectangle', 'ellipse', 'triangle']

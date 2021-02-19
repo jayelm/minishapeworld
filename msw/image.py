@@ -5,12 +5,12 @@ The image class which handles drawing/saving
 from PIL import Image
 import aggdraw
 import numpy as np
-import constants as c
+from . import constants as C
 
 
 class IMG:
     def __init__(self):
-        self.image = Image.new('RGB', (c.DIM, c.DIM))
+        self.image = Image.new('RGB', (C.DIM, C.DIM))
         self.draw = aggdraw.Draw(self.image)
 
     def draw_shapes(self, shapes, flush=True):
