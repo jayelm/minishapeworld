@@ -50,5 +50,4 @@ class SingleConfig(configbase._ConfigBase, _SingleConfigBase):
     @classmethod
     def random_config_single(cls):
         shape_spec = spec.ShapeSpec.random()
-        shape_ = shape_spec.random_shape()
-        return cls(*shape_)
+        return cls(*shape_spec)

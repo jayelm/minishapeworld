@@ -1,9 +1,14 @@
 import aggdraw
 import numpy as np
+from pyeda.boolalg.bfarray import exprvars
 
 COLORS = ["red", "blue", "green", "yellow", "white", "gray"]
 BRUSHES = {c: aggdraw.Brush(c) for c in COLORS}
 PENS = {c: aggdraw.Pen(c) for c in COLORS}
+
+COLOR_VARS = exprvars('c', len(COLORS))
+C2V = dict(zip(COLORS, COLOR_VARS))
+V2C = dict(zip(COLOR_VARS, COLORS))
 
 
 # FIXME - this should be OOP?

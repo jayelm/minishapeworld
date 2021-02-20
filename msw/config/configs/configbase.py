@@ -1,6 +1,7 @@
 import abc
 
 import numpy as np
+from tqdm import tqdm
 
 from ... import color
 from ... import constants as C
@@ -95,3 +96,25 @@ class _ConfigBase:
         x = shape.rand_pos()
         y = shape.rand_pos()
         return shape.SHAPE_IMPLS[shape_](x=x, y=y, color_=color_)
+
+    @classmethod
+    def generate(cls, n, verbose=False):
+        """
+        Generate unique configs
+        """
+        total_configs = set()
+
+        if verbose:
+            pbar = tqdm(total=n)
+
+        while len(total_configs) < n:
+            new_cfg = cls.random()
+            if new_cfg not in total_configs:
+                total_configs.add(new_cfg)
+                if verbose:
+                    pbar.update(1)
+
+        if verbose:
+            pbar.close()
+
+        return list(total_configs)

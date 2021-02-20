@@ -1,4 +1,5 @@
 from collections import namedtuple
+from enum import Enum
 
 import numpy as np
 
@@ -142,10 +143,8 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
         # 0 -> only shape specified
         # 1 -> only color specified
         # 2 -> only both specified
-        shape_1_spc = spec.ShapeSpec.random()
-        shape_2_spc = spec.ShapeSpec.random()
-        shape_1 = shape_1_spc.random_shape()
-        shape_2 = shape_2_spc.random_shape()
+        shape_1 = spec.ShapeSpec.random()
+        shape_2 = spec.ShapeSpec.random()
         if shape_1 == shape_2:
             return cls.random()  # Try again
         relation = np.random.randint(2)
@@ -155,66 +154,66 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
     def invalidate(self):
         # Invalidate by randomly choosing one property to change:
         (
-            ((shape_1_color, shape_1_shape), (shape_2_color, shape_2_shape)),
+            (shape_1, shape_2),
             relation,
             relation_dir,
         ) = self
         properties = []
-        if shape_1_color is not None:
-            properties.append(spec.ConfigProps.SHAPE_1_COLOR)
-        if shape_1_shape is not None:
-            properties.append(spec.ConfigProps.SHAPE_1_SHAPE)
-        if shape_2_color is not None:
-            properties.append(spec.ConfigProps.SHAPE_2_COLOR)
-        if shape_2_shape is not None:
-            properties.append(spec.ConfigProps.SHAPE_2_SHAPE)
+        if shape_1.color is not None:
+            properties.append(SpatialInvalidateProps.SHAPE_1_COLOR)
+        if shape_1.shape is not None:
+            properties.append(SpatialInvalidateProps.SHAPE_1_SHAPE)
+        if shape_2.color is not None:
+            properties.append(SpatialInvalidateProps.SHAPE_2_COLOR)
+        if shape_2.shape is not None:
+            properties.append(SpatialInvalidateProps.SHAPE_2_SHAPE)
         sp = len(properties)
         # Invalidate relations half of the time
         for _ in range(sp):
-            properties.append(spec.ConfigProps.RELATION_DIR)
+            properties.append(SpatialInvalidateProps.RELATION_DIR)
         # Randomly select property to invalidate
         # TODO: Support for invalidating multiple properties
         invalid_prop = np.random.choice(properties)
 
-        if invalid_prop == spec.ConfigProps.SHAPE_1_COLOR:
+        if invalid_prop == SpatialInvalidateProps.SHAPE_1_COLOR:
             inv_cfg = (
                 (
-                    (color.new_color(shape_1_color), shape_1_shape),
-                    (shape_2_color, shape_2_shape),
+                    spec.ShapeSpec(color.new_color(shape_1.color), shape_1.shape),
+                    shape_2,
                 ),
                 relation,
                 relation_dir,
             )
-        elif invalid_prop == spec.ConfigProps.SHAPE_1_SHAPE:
+        elif invalid_prop == SpatialInvalidateProps.SHAPE_1_SHAPE:
             inv_cfg = (
                 (
-                    (shape_1_color, shape.new_shape(shape_1_shape)),
-                    (shape_2_color, shape_2_shape),
+                    spec.ShapeSpec(shape_1.color, shape.new_shape(shape_1.shape)),
+                    shape_2,
                 ),
                 relation,
                 relation_dir,
             )
-        elif invalid_prop == spec.ConfigProps.SHAPE_2_COLOR:
+        elif invalid_prop == SpatialInvalidateProps.SHAPE_2_COLOR:
             inv_cfg = (
                 (
-                    (shape_1_color, shape_1_shape),
-                    (color.new_color(shape_2_color), shape_2_shape),
+                    shape_1,
+                    spec.ShapeSpec(color.new_color(shape_2.color), shape_2.shape),
                 ),
                 relation,
                 relation_dir,
             )
-        elif invalid_prop == spec.ConfigProps.SHAPE_2_SHAPE:
+        elif invalid_prop == SpatialInvalidateProps.SHAPE_2_SHAPE:
             inv_cfg = (
                 (
-                    (shape_1_color, shape_1_shape),
-                    (shape_2_color, shape.new_shape(shape_2_shape)),
+                    shape_1,
+                    spec.ShapeSpec(shape_2.color, shape.new_shape(shape_2.shape)),
                 ),
                 relation,
                 relation_dir,
             )
-        elif invalid_prop == spec.ConfigProps.RELATION_DIR:
+        elif invalid_prop == SpatialInvalidateProps.RELATION_DIR:
             inv_cfg = (
-                ((shape_1_color, shape_1_shape), (shape_2_color, shape_2_shape)),
+                (shape_1, shape_2),
                 relation,
                 1 - relation_dir,
             )
@@ -305,3 +304,11 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
                 # ABOVE
                 new_y = np.random.randint(C.X_MIN, oth_shape.y - C.BUFFER)
         return shape.SHAPE_IMPLS[shape_](x=new_x, y=new_y, color_=color_)
+
+
+class SpatialInvalidateProps(Enum):
+    SHAPE_1_COLOR = 0
+    SHAPE_1_SHAPE = 1
+    SHAPE_2_COLOR = 2
+    SHAPE_2_SHAPE = 3
+    RELATION_DIR = 4

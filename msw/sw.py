@@ -51,27 +51,6 @@ class ShapeWorld:
         self.unique_distractors = unique_distractors
         self.unrestricted_distractors = unrestricted_distractors
 
-    def generate_configs(self, n, verbose=False):
-        """
-        Generate unique configs
-        """
-        total_configs = set()
-
-        if verbose:
-            pbar = tqdm(total=n)
-
-        while len(total_configs) < n:
-            new_cfg = self.config.random()
-            if new_cfg not in total_configs:
-                total_configs.add(new_cfg)
-                if verbose:
-                    pbar.update(1)
-
-        if verbose:
-            pbar.close()
-
-        return list(total_configs)
-
     def generate(
         self,
         n,

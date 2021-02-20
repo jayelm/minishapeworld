@@ -60,22 +60,21 @@ if __name__ == "__main__":
         help="Number of test same examples (if not --gen_same or 0 will not create)",
     )
     parser.add_argument(
+        "--n_configs",
+        default=2500,
+        type=int,
+        help="If --config_split, how many total configs?"
+    )
+    parser.add_argument(
         "--train_configs",
-        default=2000,
+        default=0.8,
         type=int,
-        help="If --config_split, how many unique configs at train?",
+        help="If --config_split, what percent of total configs are training?"
     )
     parser.add_argument(
-        "--val_configs",
-        default=500,
-        type=int,
-        help="If --config_split, how many unique configs at val?",
-    )
-    parser.add_argument(
-        "--test_configs",
-        default=500,
-        type=int,
-        help="If --config_split, how many unique configs at test?",
+        "--enumerate_configs",
+        action="store_true",
+        help="Enumerate configs rather than sampling (good for logical configs)",
     )
     parser.add_argument(
         "--min_correct",
@@ -117,7 +116,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--config_type",
-        choices=["single", "spatial"],
+        choices=list(config.CONFIGS.keys()),
         default="spatial",
         help="What kind of images to generate",
     )
@@ -156,23 +155,23 @@ if __name__ == "__main__":
 
     if args.config_split:
         # Pre-generate unique configs
-        total_configs = args.train_configs + args.val_configs + args.test_configs
-        configs = world.generate_configs(total_configs, verbose=True)
-        train_configs = configs[: args.train_configs]
-        val_configs = configs[
-            args.train_configs : args.train_configs + args.val_configs
-        ]
-        test_configs = configs[args.train_configs + args.val_configs :]
+        if args.enumerate_configs:
+            configs = cfg.enumerate()
+        else:
+            configs = cfg.generate(args.n_configs, verbose=True)
+
+        n_train_configs = int(args.train_configs * len(configs))
+        train_configs = configs[:n_train_configs]
+        test_configs = configs[n_train_configs:]
     else:
         train_configs = None
-        val_configs = None
         test_configs = None
 
     os.makedirs(args.save_dir, exist_ok=True)
 
     dsets = [
         ("train", args.n_train, train_configs),
-        ("val", args.n_val, val_configs),
+        ("val", args.n_val, test_configs),
         ("test", args.n_test, test_configs),
     ]
     if args.gen_same:
