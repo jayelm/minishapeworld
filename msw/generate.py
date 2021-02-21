@@ -157,11 +157,6 @@ if __name__ == "__main__":
         # Pre-generate unique configs
         if args.enumerate_configs:
             configs = cfg.enumerate()
-            # XXX TODO: Loop through possible shape/color configs and check if
-            # satisfiable to get pos assignments. Faster than trying to
-            # satisfy from scratch (we reduce search space since we know one
-            # hot)
-            breakpoint()
         else:
             configs = cfg.generate(args.n_configs, verbose=True)
 

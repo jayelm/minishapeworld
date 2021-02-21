@@ -38,14 +38,19 @@ class ShapeSpec(_ShapeSpecBase):
         """
         Generator to loop through all possible shapespecs
         """
-        # Colors only
+        yield from cls.enumerate_color()
+        yield from cls.enumerate_shape()
+        yield from cls.enumerate_both()
+
+    @classmethod
+    def enumerate_color(cls):
         for color_ in color.COLORS:
             yield cls(color_, None)
-        # Shapes only
+
+    @classmethod
+    def enumerate_shape(cls):
         for shape_ in shape.SHAPES:
             yield cls(None, shape_)
-        # Product
-        yield from cls.enumerate_both()
 
     @classmethod
     def enumerate_both(cls):
