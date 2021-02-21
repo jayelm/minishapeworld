@@ -6,6 +6,7 @@ import numpy as np
 from shapely import affinity
 from shapely.geometry import Point, Polygon, box
 from pyeda.boolalg.bfarray import exprvars
+from pyeda.boolalg import expr
 
 from . import color
 from . import constants as C
@@ -252,3 +253,4 @@ SHAPE_IMPLS = {
 SHAPE_VARS = exprvars('s', len(SHAPES))
 S2V = dict(zip(SHAPES, SHAPE_VARS))
 V2S = dict(zip(SHAPE_VARS,SHAPES))
+ONEHOT_VAR = expr.OneHot(*SHAPE_VARS)

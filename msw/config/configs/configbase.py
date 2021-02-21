@@ -19,6 +19,9 @@ class _ConfigBase:
 
     @abc.abstractmethod
     def instantiate(self, label, **kwargs):
+        """
+        Actually create shapes according to label
+        """
         return
 
     @abc.abstractmethod

@@ -45,6 +45,10 @@ class ShapeSpec(_ShapeSpecBase):
         for shape_ in shape.SHAPES:
             yield cls(None, shape_)
         # Product
+        yield from cls.enumerate_both()
+
+    @classmethod
+    def enumerate_both(cls):
         for color_, shape_ in itertools.product(color.COLORS, shape.SHAPES):
             yield cls(color_, shape_)
 
