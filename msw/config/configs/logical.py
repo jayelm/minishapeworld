@@ -70,6 +70,25 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
             else:
                 self.neg_assignments.append(spc)
 
+        # TODO - do we need to oversample negatives? maybe for conjunctions
+        # Aassign disjunctions
+        self.disjunction = isinstance(self.formula, expr.OrOp)
+        if self.disjunction:
+            self.left_assignments = []
+            self.right_assignments = []
+            self.neither_assignments = []
+            left_formula, right_formula = self.formula.xs
+            left_formula_onehot = onehot_f(left_formula)
+            right_formula_onehot = onehot_f(right_formula)
+            for spc in spec.ShapeSpec.enumerate_both():
+                if satisfies(spc, left_formula_onehot):
+                    self.left_assignments.append(spc)
+                elif satisfies(spc, right_formula_onehot):
+                    self.right_assignments.append(spc)
+                else:
+                    self.neither_assignments.append(spc)
+            assert set(self.neither_assignments) == set(self.neg_assignments)
+
     def __hash__(self):
         return hash(str(self.formula_dnf))
 
@@ -154,8 +173,17 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
         Fixme - what to do about negative configs?
         """
         if label:
-            i = np.random.choice(len(self.pos_assignments))
-            spc = self.pos_assignments[i]
+            if self.disjunction:
+                # Equally sample from either disjunction
+                if np.random.random() < 0.5:
+                    assns = self.left_assignments
+                else:
+                    assns = self.right_assignments
+            else:
+                assns = self.pos_assignments
+
+            i = np.random.choice(len(assns))
+            spc = assns[i]
         else:
             i = np.random.choice(len(self.neg_assignments))
             spc = self.neg_assignments[i]
