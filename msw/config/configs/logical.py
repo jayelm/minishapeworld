@@ -50,8 +50,7 @@ def satisfies(spc, f):
     """
     assert spc.spec_type == spec.ShapeSpecTypes.BOTH, "must pass in both type"
     spc_expr = spc.to_expr()
-    # FIXME - do we need onehot here?
-    return expr.And(spc_expr, onehot_f(f)).satisfy_one() is not None
+    return expr.And(spc_expr, f).satisfy_one() is not None
 
 
 class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
@@ -62,11 +61,14 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
     def __init__(self, *args, **kwargs):
         self.formula_dnf = self.formula.to_dnf()
         self.formula_onehot = onehot_f(self.formula)
-        self.pos_assignments = [spc for spc in spec.ShapeSpec.enumerate_both() if satisfies(spc, self.formula_onehot)]
 
-        self.neg_formula = expr.Not(self.formula)
-        self.neg_formula_onehot = onehot_f(self.formula)
-        self.neg_assignments = [spc for spc in spec.ShapeSpec.enumerate_both() if satisfies(spc, self.neg_formula_onehot)]
+        self.pos_assignments = []
+        self.neg_assignments = []
+        for spc in spec.ShapeSpec.enumerate_both():
+            if satisfies(spc, self.formula_onehot):
+                self.pos_assignments.append(spc)
+            else:
+                self.neg_assignments.append(spc)
 
     def __hash__(self):
         return hash(str(self.formula_dnf))
@@ -102,28 +104,10 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
     @classmethod
     def enumerate(cls):
         """
-        Enumerate through possible tags. Because we have a small length (max of
-        2) we can specifically list out the formulas we want:
-        # LENGTH 1
-        1. A color/not a color
-        2. A shape/not a shape
-
-        # LENGTH 2 (i.e. a single shapecolor)
-        # I think this is just ORs across 
-        3. A shapecolor/not a shapecolor (i.e. shape and color)
-        6. A shape or a color/not a (shape or a color)
-        7. A shape or not a color
-        8. A shape and not a color
-        9. A color or not a shape
-        10. A shape and not a color
-        # This is just shapes and colors possibly NOTed. that's it?
-        # since (not a shape and not a color) -> not (shape or color)
-        # and (not a color and not a shape) -> 
-        # ORs across colors only work...not ANDs. (Can check satisfiable via
-        # onehot.)
-
-        # Maybe leave out the more complicated ones for now? This feels hard
-        # enough already.
+        Enumerate through possible logical captions.
+        They are either length 1 or 2 conjunctions/disjunctions of shapes or
+        colors, filtering out ones that are vacuous givne that shapes and
+        colors are onehot (e.g. "not green or not blue" is vacuous)
         """
         configs = set()
 
@@ -160,20 +144,32 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
                     not (f_onehot.equivalent(x1_onehot)) and
                     not (f_onehot.equivalent(x2_onehot))
                 ):
+                    # Expression should be different from the basic conjunctions.
                     configs.add(cls(f))
 
         return list(configs)
 
     def instantiate(self, label, **kwargs):
         """
-        TODO - do we actually invalidate here (hard negatives? or just find a negative satisfier)
+        Fixme - what to do about negative configs?
         """
-        pass
+        if label:
+            i = np.random.choice(len(self.pos_assignments))
+            spc = self.pos_assignments[i]
+        else:
+            i = np.random.choice(len(self.neg_assignments))
+            spc = self.neg_assignments[i]
+        s = self.add_shape(spc)
+        return self, [s]
 
     def __str__(self):
+        f_str = self.formula_to_str()
+        return f"LogicalConfig(formula={f_str})"
+
+    def formula_to_str(self):
         f_ast = self.formula.to_ast()
         f_str = LogicalConfig._ast_to_str(f_ast)
-        return f"LogicalConfig(formula={f_str})"
+        return f_str
 
     @staticmethod
     def _ast_to_str(ast):
@@ -182,7 +178,7 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
             op_name = ast[0]
             l_str = LogicalConfig._ast_to_str(ast[1])
             r_str = LogicalConfig._ast_to_str(ast[2])
-            return f"( {l_str} {op_name} {r_str} )"
+            return f"{l_str} {op_name} {r_str}"
         elif ast[0] == 'lit':
             assert len(ast) == 2
             if ast[1] < 0:  # Negative
@@ -200,4 +196,12 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
             assert len(ast) == 2
             op_name = ast[0]
             arg_str = LogicalConfig._ast_to_str(ast[1])
-            return f"( {op_name} {arg_str} )"
+            return f"{op_name} {arg_str}"
+
+    def json(self):
+        return {
+            "type": "logical",
+        }
+
+    def format(self, lang_type="standard"):
+        return self.formula_to_str()
