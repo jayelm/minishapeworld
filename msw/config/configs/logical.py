@@ -73,12 +73,11 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
         self.disjunction = isinstance(self.formula, expr.OrOp)
         self.conjunction = isinstance(self.formula, expr.AndOp)
         # Get assignments by which part they satisfy
+        self.left_assignments = []
+        self.right_assignments = []
+        self.both_assignments = []
+        self.neither_assignments = []
         if self.conjunction or self.disjunction:
-            self.left_assignments = []
-            self.right_assignments = []
-            self.both_assignments = []
-            self.neither_assignments = []
-
             left_formula, right_formula = self.formula.xs
 
             only_left = onehot_f(expr.And(left_formula, expr.Not(right_formula)))
@@ -251,8 +250,24 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
             return f"{op_name} {arg_str}"
 
     def json(self):
+        if self.disjunction:
+            op = "disjunction"
+        elif self.conjunction:
+            op = "conjunction"
+        else:
+            op = "literal"
+
         return {
             "type": "logical",
+            "positive_assignments": self.pos_assignments,
+            "negative_assignments": self.neg_assignments,
+            "op": op,
+            "breakdown": {
+                "left_assignments": self.left_assignments,
+                "right_assignments": self.right_assignments,
+                "neither_assignments": self.neither_assignments,
+                "both_assignments": self.both_assignments,
+            }
         }
 
     def format(self, lang_type="standard"):
