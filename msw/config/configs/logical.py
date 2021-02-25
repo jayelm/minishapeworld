@@ -259,16 +259,10 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
 
         return {
             "type": "logical",
-            "positive_assignments": self.pos_assignments,
-            "negative_assignments": self.neg_assignments,
+            "pos": self.pos_assignments,
+            "neg": self.neg_assignments,
             "op": op,
             "concept": self.formula_to_str(),
-            "breakdown": {
-                "left_assignments": self.left_assignments,
-                "right_assignments": self.right_assignments,
-                "neither_assignments": self.neither_assignments,
-                "both_assignments": self.both_assignments,
-            }
         }
 
     def format(self, lang_type="standard"):
