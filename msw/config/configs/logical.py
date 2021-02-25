@@ -262,6 +262,7 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
             "positive_assignments": self.pos_assignments,
             "negative_assignments": self.neg_assignments,
             "op": op,
+            "concept": self.formula_to_str(),
             "breakdown": {
                 "left_assignments": self.left_assignments,
                 "right_assignments": self.right_assignments,
