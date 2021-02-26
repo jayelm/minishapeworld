@@ -134,8 +134,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_dir", default="test", help="Save dataset to this directory"
     )
+    parser.add_argument(
+        "--seed", default=0, type=int, help="Random seed (doesn't work for MP)"
+    )
 
     args = parser.parse_args()
+
+    np.random.seed(args.seed)
 
     if len(args.n_distractors) == 1:
         args.n_distractors = args.n_distractors[0]
