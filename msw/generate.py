@@ -163,6 +163,7 @@ if __name__ == "__main__":
         n_train_configs = int(args.train_configs * len(configs))
         train_configs = configs[:n_train_configs]
         test_configs = configs[n_train_configs:]
+        print(f"{len(train_configs)} train, {len(test_configs)} test")
     else:
         train_configs = None
         test_configs = None
