@@ -77,6 +77,24 @@ if __name__ == "__main__":
         help="Enumerate configs rather than sampling (good for logical configs)",
     )
     parser.add_argument(
+        "--logical_ops",
+        nargs="+",
+        default=["and", "or", "not"],
+        help="Allowed logical conjunctions",
+    )
+    parser.add_argument(
+        "--min_logical_len",
+        type=int,
+        default=1,
+        help="Minimum logical argument length",
+    )
+    parser.add_argument(
+        "--max_logical_len",
+        type=int,
+        default=2,
+        help="Maximum logical argument length",
+    )
+    parser.add_argument(
         "--min_correct",
         type=int,
         default=None,
@@ -167,7 +185,12 @@ if __name__ == "__main__":
     if args.config_split:
         # Pre-generate unique configs
         if args.enumerate_configs:
-            configs = cfg.enumerate()
+            if args.config_type == "logical":
+                configs = cfg.enumerate(min_formula_len=args.min_logical_len,
+                                        max_formula_len=args.max_logical_len,
+                                        ops=set(args.logical_ops))
+            else:
+                configs = cfg.enumerate()
         else:
             configs = cfg.generate(args.n_configs, verbose=True)
 

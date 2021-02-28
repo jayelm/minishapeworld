@@ -107,19 +107,21 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
         return str(self.formula_dnf) == str(other.formula_dnf)
 
     @classmethod
-    def random(cls, max_formula_len=2):
+    def random(cls, max_formula_len=2, ops={"and", "or", "not"}):
         flen = np.random.randint(max_formula_len) + 1
         exprs = []
         for _ in range(flen):
             x = spec.ShapeSpec.random().to_expr()
             # Potentially negate
-            if np.random.random() < 0.5:
-                x = expr.Not(x)
+            if "not" in ops:
+                if np.random.random() < 0.5:
+                    x = expr.Not(x)
             exprs.append(x)
         # Combine formulas
         formula = exprs.pop()
         while exprs:
             # FIRST SORT OUT ORSvsANDS
+            # ALSO USE OPS
             raise NotImplementedError
             if np.random.random() < 0.5:
                 op = expr.And
@@ -132,7 +134,7 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
         return cls(formula)
 
     @classmethod
-    def enumerate(cls):
+    def enumerate(cls, min_formula_len=1, max_formula_len=2, ops={"and", "or", "not"}):
         """
         Enumerate through possible logical captions.
         They are either length 1 or 2 conjunctions/disjunctions of shapes or
@@ -141,41 +143,52 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
         """
         configs = set()
 
-        # NOTE - there may be an issue here if we for example reach Or(x,
-        # And(x, y)) which isn't simplified to x according to pyeda. But we
-        # always start from the bottom up.
+        assert min_formula_len in range(1, 3), "Invalid min formula length"
+        assert max_formula_len in range(1, 3), "Invalid max formula length"
+        assert max_formula_len >= min_formula_len, "max must be >= min"
 
         # Length 1
-        for spc in spec.ShapeSpec.enumerate_color():
-            configs.add(cls(spc.to_expr()))
-            configs.add(cls(expr.Not(spc.to_expr())))
+        if min_formula_len <= 1:
+            for spc in spec.ShapeSpec.enumerate_color():
+                configs.add(cls(spc.to_expr()))
+                if "not" in ops:
+                    configs.add(cls(expr.Not(spc.to_expr())))
 
-        for spc in spec.ShapeSpec.enumerate_shape():
-            configs.add(cls(spc.to_expr()))
-            configs.add(cls(expr.Not(spc.to_expr())))
+            for spc in spec.ShapeSpec.enumerate_shape():
+                configs.add(cls(spc.to_expr()))
+                if "not" in ops:
+                    configs.add(cls(expr.Not(spc.to_expr())))
 
         # Length 2 - AND
-        primitives = [
-            p
-            for p in color.COLOR_VARS + shape.SHAPE_VARS
-        ]
-        primitives += [expr.Not(p) for p in primitives]
-        primitives_with_onehots = [
-            (p, onehot_f(p))
-            for p in primitives
-        ]
-        combos = itertools.combinations(primitives_with_onehots, 2)
-        for (x1, x1_onehot), (x2, x2_onehot) in combos:
-            for op in [expr.And, expr.Or]:
-                f = op(x1, x2)
-                f_onehot = onehot_f(f)
-                if (
-                    expr_is_valid(f) and
-                    not (f_onehot.equivalent(x1_onehot)) and
-                    not (f_onehot.equivalent(x2_onehot))
-                ):
-                    # Expression should be different from the basic conjunctions.
-                    configs.add(cls(f))
+        if max_formula_len >= 2:
+            primitives = [
+                p
+                for p in color.COLOR_VARS + shape.SHAPE_VARS
+            ]
+            if "not" in ops:
+                primitives += [expr.Not(p) for p in primitives]
+            primitives_with_onehots = [
+                (p, onehot_f(p))
+                for p in primitives
+            ]
+            combos = itertools.combinations(primitives_with_onehots, 2)
+            for (x1, x1_onehot), (x2, x2_onehot) in combos:
+                allowed_ops = []
+                if "or" in ops:
+                    allowed_ops.append(expr.Or)
+                if "and" in ops:
+                    allowed_ops.append(expr.And)
+
+                for op in allowed_ops:
+                    f = op(x1, x2)
+                    f_onehot = onehot_f(f)
+                    if (
+                        expr_is_valid(f) and
+                        not (f_onehot.equivalent(x1_onehot)) and
+                        not (f_onehot.equivalent(x2_onehot))
+                    ):
+                        # Expression should be different from the basic conjunctions.
+                        configs.add(cls(f))
 
         return list(configs)
 
