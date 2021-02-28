@@ -107,6 +107,12 @@ if __name__ == "__main__":
         help="What kind of data to generate",
     )
     parser.add_argument(
+        "--lang_type",
+        choices=["standard", "simple", "conjunction"],
+        default="standard",
+        help="What kind of language to generate (only applicable to single config for now)",
+    )
+    parser.add_argument(
         "--n_distractors",
         default=[2, 3],
         nargs="*",
@@ -196,6 +202,7 @@ if __name__ == "__main__":
                 configs=cfgs,
                 verbose=True,
                 desc=dname,
+                lang_type=args.lang_type,
             )
             dfile = os.path.join(args.save_dir, f"{dname}.npz")
             np.savez_compressed(dfile, **d)

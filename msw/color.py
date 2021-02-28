@@ -21,7 +21,7 @@ def random(colors=None):
         return np.random.choice(colors)
 
 
-def new_color(existing_color, colors=None):
+def new(existing_color, colors=None):
     if colors is None:
         colors = COLORS
     if len(colors) == 1 and colors[0] == existing_color:

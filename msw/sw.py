@@ -97,7 +97,7 @@ class ShapeWorld:
             if pool is None:
                 pool_was_none = True
                 pool = mp.Pool(workers)
-        if lang_type not in ["standard", "simple"]:
+        if lang_type not in ["standard", "simple", "conjunction"]:
             raise NotImplementedError(f"lang_type = {lang_type}")
 
         if self.data_type == "concept":

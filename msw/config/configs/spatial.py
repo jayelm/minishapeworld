@@ -178,7 +178,7 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
         if invalid_prop == SpatialInvalidateProps.SHAPE_1_COLOR:
             inv_cfg = (
                 (
-                    spec.ShapeSpec(color.new_color(shape_1.color), shape_1.shape),
+                    spec.ShapeSpec(color.new(shape_1.color), shape_1.shape),
                     shape_2,
                 ),
                 relation,
@@ -187,7 +187,7 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
         elif invalid_prop == SpatialInvalidateProps.SHAPE_1_SHAPE:
             inv_cfg = (
                 (
-                    spec.ShapeSpec(shape_1.color, shape.new_shape(shape_1.shape)),
+                    spec.ShapeSpec(shape_1.color, shape.new(shape_1.shape)),
                     shape_2,
                 ),
                 relation,
@@ -197,7 +197,7 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
             inv_cfg = (
                 (
                     shape_1,
-                    spec.ShapeSpec(color.new_color(shape_2.color), shape_2.shape),
+                    spec.ShapeSpec(color.new(shape_2.color), shape_2.shape),
                 ),
                 relation,
                 relation_dir,
@@ -206,7 +206,7 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
             inv_cfg = (
                 (
                     shape_1,
-                    spec.ShapeSpec(shape_2.color, shape.new_shape(shape_2.shape)),
+                    spec.ShapeSpec(shape_2.color, shape.new(shape_2.shape)),
                 ),
                 relation,
                 relation_dir,

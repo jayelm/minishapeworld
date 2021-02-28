@@ -229,7 +229,7 @@ def random(shapes=None):
         return np.random.choice(shapes)
 
 
-def new_shape(existing_shape, shapes=None):
+def new(existing_shape, shapes=None):
     if shapes is None:
         shapes = SHAPES
     if len(shapes) == 1 and shapes[0] == existing_shape:
