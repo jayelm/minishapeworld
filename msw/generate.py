@@ -4,6 +4,7 @@ Generate shapeworld reference games
 
 import json
 import os
+import gzip
 
 import numpy as np
 
@@ -240,9 +241,9 @@ if __name__ == "__main__":
             dfile = os.path.join(args.save_dir, f"{dname}.npz")
             np.savez_compressed(dfile, **d)
             if not args.no_worlds:
-                wfile = os.path.join(args.save_dir, f"{dname}_worlds.json")
-                with open(wfile, "w") as f:
-                    json.dump(dworlds, f)
+                wfile = os.path.join(args.save_dir, f"{dname}_worlds.json.gz")
+                with gzip.open(wfile, 'wt', encoding="ascii") as zf:
+                    json.dump(dworlds, zf)
 
             if dname == "train" and args.vis is not None:
                 # Save train for vis
