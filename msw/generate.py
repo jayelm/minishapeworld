@@ -182,16 +182,17 @@ if __name__ == "__main__":
         data_type=args.data_type, config=cfg, n_distractors=args.n_distractors
     )
 
-    if args.config_split:
-        # Pre-generate unique configs
-        if args.enumerate_configs:
-            if args.config_type == "logical":
-                configs = cfg.enumerate(min_formula_len=args.min_logical_len,
-                                        max_formula_len=args.max_logical_len,
-                                        ops=set(args.logical_ops))
-            else:
-                configs = cfg.enumerate()
+    if args.enumerate_configs:
+        if args.config_type == "logical":
+            configs = cfg.enumerate(min_formula_len=args.min_logical_len,
+                                    max_formula_len=args.max_logical_len,
+                                    ops=set(args.logical_ops))
         else:
+            configs = cfg.enumerate()
+
+    if args.config_split:
+        if not args.enumerate_configs:
+            # Sample many configs
             configs = cfg.generate(args.n_configs, verbose=True)
 
         n_train_configs = int(args.train_configs * len(configs))
@@ -199,8 +200,12 @@ if __name__ == "__main__":
         test_configs = configs[n_train_configs:]
         print(f"{len(train_configs)} train, {len(test_configs)} test")
     else:
-        train_configs = None
-        test_configs = None
+        if args.enumerate_configs:
+            train_configs = configs
+            test_configs = configs
+        else:
+            train_configs = None
+            test_configs = None
 
     os.makedirs(args.save_dir, exist_ok=True)
 
