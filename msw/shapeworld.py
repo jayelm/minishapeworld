@@ -149,7 +149,7 @@ class ShapeWorld:
             # Config + all shapes in image
             world_jsons.append({
                 "config": target_cfg.json(),
-                "images": [[s.json() for s in ss] for ss in shapes]
+                "imgs": [[s.json() for s in ss] for ss in shapes]
             })
 
         if do_mp and pool_was_none:  # Remember to close the pool
