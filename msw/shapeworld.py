@@ -146,11 +146,11 @@ class ShapeWorld:
             all_labels[i] = labels
             target_configs.append(target_cfg)
             all_configs.append(cfgs)
-            wjsons = [cfg.world_json(s) for cfg, s in zip(cfgs, shapes)]
-            if self.data_type == "caption":
-                # No multiple images per example
-                wjsons = wjsons[0]
-            world_jsons.append(wjsons)
+            # Config + all shapes in image
+            world_jsons.append({
+                "config": target_cfg.json(),
+                "images": [[s.json() for s in ss] for ss in shapes]
+            })
 
         if do_mp and pool_was_none:  # Remember to close the pool
             pool.close()

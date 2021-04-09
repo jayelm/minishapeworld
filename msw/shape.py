@@ -104,7 +104,7 @@ class Shape:
             "shape": self.name,
             "color": self.color,
             "pos": {"x": self.x, "y": self.y},
-            "rotation": self.rotation,
+            # "rot": self.rotation,  # I don't think I ever use this
         }
 
 
