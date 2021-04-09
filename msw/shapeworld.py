@@ -2,6 +2,8 @@ import multiprocessing as mp
 
 import numpy as np
 from tqdm import tqdm
+import h5py
+import os
 
 from . import color, config
 from . import constants as C
@@ -64,7 +66,9 @@ class ShapeWorld:
         pool=None,
         workers=0,
         verbose=False,
-        desc="",
+        split="",
+        save_hdf5=False,
+        save_dir=None,
     ):
         """
         Generate dataset
@@ -89,6 +93,9 @@ class ShapeWorld:
         :return worlds: a JSON object: list of [lists of worlds], each world
             being the shapes and config (possibly invalidated) for the image
         """
+        if save_hdf5 and save_dir is None:
+            raise ValueError("Must specify save_dir if save_hdf5=True")
+
         do_mp = workers > 0
         if not do_mp and pool is not None:
             raise ValueError("Can't specify pool if workers > 0")
@@ -112,8 +119,13 @@ class ShapeWorld:
                 0 < n_correct <= n_images
             ), f"n_correct ({n_correct}) must be > 0 and <= n_images ({n_images})"
 
-        all_imgs = np.zeros((n, n_images, 3, C.DIM, C.DIM), dtype=np.uint8)
-        all_labels = np.zeros((n, n_images), dtype=np.uint8)
+        if save_hdf5:
+            all_f = h5py.File(os.path.join(save_dir, f"{split}.hdf5"), "w")
+            all_imgs = all_f.require_dataset("imgs", (n, n_images, 3, C.DIM, C.DIM), dtype=np.uint8)
+            all_labels = all_f.require_dataset("labels", (n, n_images), dtype=np.uint8)
+        else:
+            all_imgs = np.zeros((n, n_images, 3, C.DIM, C.DIM), dtype=np.uint8)
+            all_labels = np.zeros((n, n_images), dtype=np.uint8)
 
         mp_args = [
             (n_images, min_correct, p_correct, n_correct, configs, i) for i in range(n)
@@ -124,14 +136,14 @@ class ShapeWorld:
         else:
             gen_iter = map(self._generate_one_mp, mp_args)
         if verbose:
-            gen_iter = tqdm(gen_iter, total=n, desc=desc)
+            gen_iter = tqdm(gen_iter, total=n, desc=split)
 
         target_configs = []
         all_configs = []
         world_jsons = []
         for imgs, labels, target_cfg, cfgs, shapes, i in gen_iter:
-            all_imgs[i,] = imgs
-            all_labels[i,] = labels
+            all_imgs[i] = imgs
+            all_labels[i] = labels
             target_configs.append(target_cfg)
             all_configs.append(cfgs)
             wjsons = [cfg.world_json(s) for cfg, s in zip(cfgs, shapes)]
@@ -147,15 +159,17 @@ class ShapeWorld:
         if float_type:
             all_imgs = np.divide(all_imgs, 255.0)
             all_labels = all_labels.astype(np.float32)
-        langs = np.array(
-            [cfg.format(lang_type=lang_type) for cfg in target_configs],
-            dtype=np.unicode,
-        )
 
-        if self.data_type == "caption":
-            # Squeeze out the images per example dim
-            all_imgs = all_imgs.squeeze(1)
-            all_labels = all_labels.squeeze(1)
+        lang_arr = [cfg.format(lang_type=lang_type) for cfg in target_configs]
+        max_lang_len = max([len(lang) for lang in lang_arr])
+        s_dtype = f"S{max_lang_len}"
+        lang_arr = np.array(lang_arr, dtype=s_dtype)
+        if save_hdf5:
+            if "langs" in all_f:
+                del all_f["langs"]
+            langs = all_f.create_dataset("langs", (len(lang_arr), ), s_dtype, lang_arr)
+        else:
+            langs = lang_arr
 
         return {"imgs": all_imgs, "labels": all_labels, "langs": langs,}, world_jsons
 

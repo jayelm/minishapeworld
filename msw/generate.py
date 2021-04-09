@@ -146,6 +146,9 @@ if __name__ == "__main__":
         help="What kind of images to generate",
     )
     parser.add_argument(
+        "--hdf5", action="store_true", help="Save in hdf5 format (vs npz)"
+    )
+    parser.add_argument(
         "--no_worlds", action="store_true", help="Don't save world JSONs"
     )
     parser.add_argument(
@@ -235,11 +238,17 @@ if __name__ == "__main__":
                 workers=args.workers,
                 configs=cfgs,
                 verbose=True,
-                desc=dname,
+                split=dname,
                 lang_type=args.lang_type,
+                save_hdf5=args.hdf5,
+                save_dir=args.save_dir,
             )
-            dfile = os.path.join(args.save_dir, f"{dname}.npz")
-            np.savez_compressed(dfile, **d)
+
+            if not args.hdf5:
+                # Save np arrays directly to disk
+                dfile = os.path.join(args.save_dir, f"{dname}.npz")
+                np.savez_compressed(dfile, **d)
+
             if not args.no_worlds:
                 wfile = os.path.join(args.save_dir, f"{dname}_worlds.json.gz")
                 with gzip.open(wfile, 'wt', encoding="ascii") as zf:

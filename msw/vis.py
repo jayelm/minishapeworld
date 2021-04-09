@@ -7,6 +7,7 @@ import os
 
 import numpy as np
 from PIL import Image
+from tqdm import tqdm
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -30,7 +31,7 @@ div.example {{ background-color: #eeeeee; }}
 
 def make_example_html(example_i, labels, lang):
     return '<div class="example"><h1>{}</h1><p>{}</p></div>'.format(
-        lang, make_image_html(example_i, labels)
+        lang.decode("utf-8"), make_image_html(example_i, labels)
     )
 
 
@@ -47,10 +48,13 @@ def make_image_html(example_i, labels):
         return '<img src="{}.png">'.format(example_i)
 
 
-def visualize(img_dir, data, n=100):
+def visualize(img_dir, data, n=100, verbose=True):
     # Save to test directory
     data = {k: v[:n] for k, v in data.items()}
     data_arr = list(zip(data["imgs"], data["labels"], data["langs"]))
+    if verbose:
+        data_arr = tqdm(data_arr, desc="visualize")
+
     for example_i, (example, labels, lang) in enumerate(data_arr):
         if len(example.shape) == 3:
             # Caption dataset
