@@ -8,7 +8,7 @@ import gzip
 
 import numpy as np
 
-from . import config, sw, vis
+from . import config, shapeworld, vis
 
 if __name__ == "__main__":
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -179,7 +179,7 @@ if __name__ == "__main__":
 
     cfg = config.CONFIGS[args.config_type]
 
-    world = sw.ShapeWorld(
+    world = shapeworld.ShapeWorld(
         data_type=args.data_type, config=cfg, n_distractors=args.n_distractors
     )
 
