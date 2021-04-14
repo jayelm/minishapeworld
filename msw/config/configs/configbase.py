@@ -18,7 +18,7 @@ class _ConfigBase:
         return
 
     @abc.abstractmethod
-    def instantiate(self, label, **kwargs):
+    def instantiate(self, label, shape_kwargs=None, **kwargs):
         """
         Actually create shapes according to label
         """
@@ -66,7 +66,9 @@ class _ConfigBase:
             "shapes": [s.json() for s in shapes],
         }
 
-    def add_shape_from_spec(self, spec, relation, relation_dir, shapes=None, attempt=1):
+    def add_shape_from_spec(self, spec, relation, relation_dir, shapes=None, attempt=1, shape_kwargs=None):
+        if shape_kwargs is None:
+            shape_kwargs = {}
         if attempt > C.MAX_PLACEMENT_ATTEMPTS:
             return None
         color_, shape_ = spec
@@ -75,7 +77,7 @@ class _ConfigBase:
         if color_ is None:
             color_ = color.random()
         s = shape.SHAPE_IMPLS[shape_](
-            relation=relation, relation_dir=relation_dir, color_=color_
+            relation=relation, relation_dir=relation_dir, color_=color_, **shape_kwargs,
         )
         if shapes is not None:
             for oth in shapes:
@@ -87,10 +89,12 @@ class _ConfigBase:
             return s
         return s
 
-    def add_shape(self, spec):
+    def add_shape(self, spec, shape_kwargs=None):
         """
         Add shape according to spec
         """
+        if shape_kwargs is None:
+            shape_kwargs = {}
         color_, shape_ = spec
         if shape_ is None:
             shape_ = shape.random()
@@ -98,7 +102,7 @@ class _ConfigBase:
             color_ = color.random()
         x = shape.rand_pos()
         y = shape.rand_pos()
-        return shape.SHAPE_IMPLS[shape_](x=x, y=y, color_=color_)
+        return shape.SHAPE_IMPLS[shape_](x=x, y=y, color_=color_, **shape_kwargs)
 
     @classmethod
     def generate(cls, n, verbose=False):

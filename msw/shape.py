@@ -34,6 +34,7 @@ class Shape:
         relation_dir=None,
         color_=None,
         max_rotation=90,
+        color_variance=None,
     ):
         if color_ is None:
             raise NotImplementedError("Must specify color")
@@ -69,10 +70,12 @@ class Shape:
                 else:
                     self.y = np.random.randint(C.X_MIN_34, C.X_MAX)
         self.rotation = np.random.randint(max_rotation)
+        self.color_variance = color_variance
         self.init_shape()
 
     def draw(self, image):
-        image.draw.polygon(self.coords, color.PENS[self.color])
+        acol = color.AGGDRAW_COLORS[self.color](self.color_variance)
+        image.draw.polygon(self.coords, acol["pen"])
 
     def intersects(self, oth):
         return self.shape.intersects(oth.shape)
@@ -139,7 +142,8 @@ class Circle(Ellipse):
         self.coords = [int(x) for x in self.shape.bounds]
 
     def draw(self, image):
-        image.draw.ellipse(self.coords, color.BRUSHES[self.color])
+        acol = color.AGGDRAW_COLORS[self.color](self.color_variance)
+        image.draw.ellipse(self.coords, acol["brush"])
 
 
 class Rectangle(Shape):
@@ -168,8 +172,9 @@ class Rectangle(Shape):
         )
 
     def draw(self, image):
+        acol = color.AGGDRAW_COLORS[self.color](self.color_variance)
         image.draw.polygon(
-            self.coords, color.BRUSHES[self.color], color.PENS[self.color]
+            self.coords, acol["brush"], acol["pen"],
         )
 
 
@@ -217,8 +222,9 @@ class Triangle(Shape):
         )
 
     def draw(self, image):
+        acol = color.AGGDRAW_COLORS[self.color](self.color_variance)
         image.draw.polygon(
-            self.coords, color.BRUSHES[self.color], color.PENS[self.color]
+            self.coords, acol["brush"], acol["pen"],
         )
 
 
@@ -252,5 +258,5 @@ SHAPE_IMPLS = {
 
 SHAPE_VARS = exprvars('s', len(SHAPES))
 S2V = dict(zip(SHAPES, SHAPE_VARS))
-V2S = dict(zip(SHAPE_VARS,SHAPES))
+V2S = dict(zip(SHAPE_VARS, SHAPES))
 ONEHOT_VAR = expr.OneHot(*SHAPE_VARS)

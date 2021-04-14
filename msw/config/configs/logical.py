@@ -192,7 +192,7 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
 
         return list(configs)
 
-    def instantiate(self, label, **kwargs):
+    def instantiate(self, label, shape_kwargs=None, **kwargs):
         """
         for OR, POSITIVES are sampled equally from
         left_assn, right_assn, both_assn
@@ -223,7 +223,7 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
                 assns = self.neg_assignments
 
         spc = assns[np.random.choice(len(assns))]
-        s = self.add_shape(spc)
+        s = self.add_shape(spc, shape_kwargs=shape_kwargs)
         return self, [s]
 
     def __str__(self):

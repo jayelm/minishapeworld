@@ -20,9 +20,9 @@ class ShapeWorld:
         n_distractors=0,
         unique_distractors=True,
         unrestricted_distractors=True,
+        color_variance=None,
     ):
         """
-
         :param data_type: one of 'concept', 'reference' or 'caption'
         :param img_type: what kind of concept is represented in each image
         :param colors: optional subset of colors to sample from
@@ -52,6 +52,9 @@ class ShapeWorld:
         self.n_distractors = n_distractors
         self.unique_distractors = unique_distractors
         self.unrestricted_distractors = unrestricted_distractors
+        self.shape_kwargs = {
+            "color_variance": color_variance,
+        }
 
     def generate(
         self,
@@ -248,7 +251,11 @@ class ShapeWorld:
             else:
                 label = np.random.random() < p_correct
 
-            new_cfg, new_shapes = target_cfg.instantiate(label)
+            new_cfg, new_shapes = target_cfg.instantiate(
+                label,
+                shape_kwargs=self.shape_kwargs,
+                n_distractors=self.n_distractors,
+            )
 
             # Create image and draw shapes
             img = self.create_image(new_shapes)

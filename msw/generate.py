@@ -114,6 +114,12 @@ if __name__ == "__main__":
         help="Exact number of correct images (must be less than n_images; concept only; overrides --p_correct and --min_correct)",
     )
     parser.add_argument(
+        "--color_variance",
+        type=float,
+        default=0.0,
+        help="percentage variance on h/s/v colors (in [0, 1]). recommended: 0.02",
+    )
+    parser.add_argument(
         "--workers",
         default=0,
         type=int,
@@ -183,7 +189,10 @@ if __name__ == "__main__":
     cfg = config.CONFIGS[args.config_type]
 
     world = shapeworld.ShapeWorld(
-        data_type=args.data_type, config=cfg, n_distractors=args.n_distractors
+        data_type=args.data_type,
+        config=cfg,
+        #  n_distractors=args.n_distractors,
+        color_variance=args.color_variance,
     )
 
     if args.enumerate_configs:
@@ -242,6 +251,7 @@ if __name__ == "__main__":
                 lang_type=args.lang_type,
                 save_hdf5=args.hdf5,
                 save_dir=args.save_dir,
+
             )
 
             if not args.hdf5:

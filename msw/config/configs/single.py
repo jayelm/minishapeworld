@@ -42,16 +42,10 @@ class SingleConfig(configbase._ConfigBase, _SingleConfigBase):
     def json(self):
         return {"type": "single", "shape": self.shape, "color": self.color}
 
-    def instantiate(self, label):
+    def instantiate(self, label, shape_kwargs=None, **kwargs):
         new_cfg = self if label else self.invalidate()
 
-        color_, shape_ = new_cfg
-        if shape_ is None:
-            shape_ = shape.random_shape()
-        if color_ is None:
-            color_ = color.random_color()
-        s = shape.SHAPE_IMPLS[shape_](color_=color_)
-
+        s = self.add_shape(new_cfg, shape_kwargs=shape_kwargs)
         return new_cfg, [s]
 
     def invalidate(self):
@@ -79,7 +73,7 @@ class SingleConfig(configbase._ConfigBase, _SingleConfigBase):
             raise RuntimeError
 
     @classmethod
-    def random_config_single(cls):
+    def random(cls):
         shape_spec = spec.ShapeSpec.random()
         return cls(*shape_spec)
 

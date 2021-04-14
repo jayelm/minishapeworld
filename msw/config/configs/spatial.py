@@ -221,7 +221,7 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
             raise RuntimeError
         return type(self)(*inv_cfg)
 
-    def instantiate(self, label, n_distractors=0):
+    def instantiate(self, label, n_distractors=0, shape_kwargs=None, **kwargs):
         """
         Generate a single spatial relation according to the config,
         invalidating it if the label is 0.
@@ -230,12 +230,12 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
         while cfg_attempts < C.MAX_INVALIDATE_ATTEMPTS:
             new_cfg = self if label else self.invalidate()
             (ss1, ss2), relation, relation_dir = new_cfg
-            s2 = self.add_shape_from_spec(ss2, relation, relation_dir)
+            s2 = self.add_shape_from_spec(ss2, relation, relation_dir, shape_kwargs=shape_kwargs)
 
             # Place second shape
             attempts = 0
             while attempts < C.MAX_PLACEMENT_ATTEMPTS:
-                s1 = self.add_shape_rel(ss1, s2, relation, relation_dir)
+                s1 = self.add_shape_rel(ss1, s2, relation, relation_dir, shape_kwargs=shape_kwargs)
                 if not s2.intersects(s1):
                     break
                 attempts += 1
@@ -258,7 +258,7 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
             attempts = 0
             while attempts < C.MAX_DISTRACTOR_PLACEMENT_ATTEMPTS:
                 dss = self.sample_distractor(existing_shapes=shapes)
-                ds = self.add_shape(dss)
+                ds = self.add_shape(dss, shape_kwargs=shape_kwargs)
                 # No intersections
                 if not any(ds.intersects(s) for s in shapes):
                     if label:
@@ -278,10 +278,12 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
 
         return new_cfg, shapes
 
-    def add_shape_rel(self, spec, oth_shape, relation, relation_dir):
+    def add_shape_rel(self, spec, oth_shape, relation, relation_dir, shape_kwargs=None):
         """
         Add shape, obeying the relation/relation_dir w.r.t. oth shape
         """
+        if shape_kwargs is None:
+            shape_kwargs = {}
         color_, shape_ = spec
         if shape_ is None:
             shape_ = shape.random()
@@ -303,7 +305,7 @@ class SpatialConfig(configbase._ConfigBase, _SpatialConfigBase):
             else:
                 # ABOVE
                 new_y = np.random.randint(C.X_MIN, oth_shape.y - C.BUFFER)
-        return shape.SHAPE_IMPLS[shape_](x=new_x, y=new_y, color_=color_)
+        return shape.SHAPE_IMPLS[shape_](x=new_x, y=new_y, color_=color_, **shape_kwargs)
 
 
 class SpatialInvalidateProps(Enum):
