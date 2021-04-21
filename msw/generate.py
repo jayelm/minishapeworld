@@ -120,6 +120,11 @@ if __name__ == "__main__":
         help="percentage variance on h/s/v colors (in [0, 1]). recommended: 0.02",
     )
     parser.add_argument(
+        "--oversample_shape",
+        action="store_true",
+        help="Sample extra shapes for logical configs",
+    )
+    parser.add_argument(
         "--workers",
         default=0,
         type=int,
@@ -219,6 +224,10 @@ if __name__ == "__main__":
         else:
             train_configs = None
             test_configs = None
+
+    if args.config_type == "logical" and args.oversample_shape:
+        train_configs = config.configs.logical.oversample_shape(train_configs)
+        test_configs = config.configs.logical.oversample_shape(test_configs)
 
     os.makedirs(args.save_dir, exist_ok=True)
 

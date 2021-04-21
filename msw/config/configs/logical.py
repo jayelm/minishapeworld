@@ -16,6 +16,30 @@ from . import configbase
 _LogicalConfigBase = namedtuple("LogicalConfig", ["formula"])
 
 
+def oversample_shape(configs):
+    shape_configs = []
+    other_configs = []
+    for config in configs:
+        if not config.disjunction and not config.conjunction:
+            # Unary
+            config_str = config.formula_to_str()
+            if config_str.startswith("not "):
+                config_str = config_str[4:]
+            # TODO - maybe oversample shape/conjunctions too?
+            if config_str in shape.SHAPES:
+                shape_configs.append(config)
+            else:
+                other_configs.append(config)
+        else:
+            other_configs.append(config)
+
+    while len(shape_configs) < len(other_configs):
+        i = np.random.choice(len(shape_configs))
+        shape_configs.append(shape_configs[i])
+
+    return shape_configs + other_configs
+
+
 def onehot_f(f):
     return expr.And(f, color.ONEHOT_VAR, shape.ONEHOT_VAR)
 
