@@ -33,11 +33,12 @@ def oversample_shape(configs):
         else:
             other_configs.append(config)
 
-    while len(shape_configs) < len(other_configs):
+    shape_configs_rep = []
+    while len(shape_configs_rep) < len(other_configs):
         i = np.random.choice(len(shape_configs))
-        shape_configs.append(shape_configs[i])
+        shape_configs_rep.append(shape_configs[i])
 
-    return shape_configs + other_configs
+    return shape_configs_rep + other_configs
 
 
 def onehot_f(f):
