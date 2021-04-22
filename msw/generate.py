@@ -125,6 +125,13 @@ if __name__ == "__main__":
         help="Sample extra shapes for logical configs",
     )
     parser.add_argument(
+        "--oversample_shape_strategy",
+        type=str,
+        default="singleton_half",
+        choices=["singleton_half", "singleton_quarter", "any_2x"],
+        help="Sample extra shapes for logical configs",
+    )
+    parser.add_argument(
         "--workers",
         default=0,
         type=int,
@@ -226,8 +233,8 @@ if __name__ == "__main__":
             test_configs = None
 
     if args.config_type == "logical" and args.oversample_shape:
-        train_configs = config.configs.logical.oversample_shape(train_configs)
-        test_configs = config.configs.logical.oversample_shape(test_configs)
+        train_configs = config.configs.logical.oversample(train_configs, strategy=args.oversample_shape_strategy)
+        test_configs = config.configs.logical.oversample(test_configs, strategy=args.oversample_shape_strategy)
 
     os.makedirs(args.save_dir, exist_ok=True)
 

@@ -16,29 +16,56 @@ from . import configbase
 _LogicalConfigBase = namedtuple("LogicalConfig", ["formula"])
 
 
-def oversample_shape(configs):
-    shape_configs = []
+def contains_shape(config):
+    config_str = config.formula_to_str()
+    config_toks = config_str.split(" ")
+    return any(ctok in shape.SHAPES for ctok in config_toks)
+
+
+def oversample(configs, strategy="singleton_half"):
+    """
+    Tested options in this function:
+    (1) sample singleton shapes up to half of all concepts
+    (2) sample singleton shapes up to 1/4 of all concepts
+    (3) sample anything containing shape to be twice as many as anything not
+        containing shape (note that we even have more colors!!)
+    """
+    if strategy == "singleton_half":
+        return _oversample(configs, special_criterion=is_singleton_shape, special_ratio=1)
+    elif strategy == "singleton_quarter":
+        return _oversample(configs, special_criterion=is_singleton_shape, special_ratio=0.5)
+    elif strategy == "any_2x":
+        return _oversample(configs, special_criterion=contains_shape, special_ratio=2)
+    else:
+        raise ValueError(f"Unknown strategy {strategy}")
+
+
+def is_singleton_shape(config):
+    if not config.disjunction and not config.conjunction:
+        # Unary
+        config_str = config.formula_to_str()
+        if config_str.startswith("not "):
+            config_str = config_str[4:]
+        return config_str in shape.SHAPES
+    return False
+
+
+def _oversample(configs, special_criterion=is_singleton_shape, special_ratio=1):
+    special_configs = []
     other_configs = []
     for config in configs:
-        if not config.disjunction and not config.conjunction:
-            # Unary
-            config_str = config.formula_to_str()
-            if config_str.startswith("not "):
-                config_str = config_str[4:]
-            # TODO - maybe oversample shape/conjunctions too?
-            if config_str in shape.SHAPES:
-                shape_configs.append(config)
-            else:
-                other_configs.append(config)
+        if special_criterion(config):
+            special_configs.append(config)
         else:
             other_configs.append(config)
 
-    shape_configs_rep = []
-    while len(shape_configs_rep) < len(other_configs):
-        i = np.random.choice(len(shape_configs))
-        shape_configs_rep.append(shape_configs[i])
+    special_configs_rep = []
+    target_len = int(special_ratio * len(other_configs))
+    while len(special_configs_rep) < target_len:
+        i = np.random.choice(len(special_configs))
+        special_configs_rep.append(special_configs[i])
 
-    return shape_configs_rep + other_configs
+    return special_configs_rep + other_configs
 
 
 def onehot_f(f):
