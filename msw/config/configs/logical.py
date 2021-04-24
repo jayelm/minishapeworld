@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import itertools
 
 from pyeda.boolalg import expr
@@ -36,8 +36,88 @@ def oversample(configs, strategy="singleton_half"):
         return _oversample(configs, special_criterion=is_singleton_shape, special_ratio=0.5)
     elif strategy == "any_2x":
         return _oversample(configs, special_criterion=contains_shape, special_ratio=2)
+    elif strategy == "even":
+        return _oversample_even(configs)
     else:
         raise ValueError(f"Unknown strategy {strategy}")
+
+
+def _oversample_even(configs):
+    config_types = defaultdict(list)
+    for config in configs:
+        config_str = config.formula_to_str()
+        config_lf = concept_to_lf(config_str)
+        config_type = lf_to_config_type(config_lf)
+        config_types[config_type].append(config)
+    # Get maximum length, multiply by 10 to reduce potential issues with finite
+    # oversampling
+    max_n_cfgs = max(len(cfgs) for cfgs in config_types.values()) * 10
+
+    even_config_types = defaultdict(list)
+    for config_type, configs in config_types.items():
+        while len(even_config_types[config_type]) < max_n_cfgs:
+            i = np.random.choice(len(configs))
+            even_config_types[config_type].append(configs[i])
+
+    flattened_even_configs = []
+    for configs in even_config_types.values():
+        flattened_even_configs.extend(configs)
+
+    return flattened_even_configs
+
+
+def _concept_to_lf(concept):
+    """
+    Parse concept. Since fixed recursion we don't have to worry about
+    precedence
+    """
+    op = ""
+    if "or" in concept:
+        op = "or"
+    elif "and" in concept:
+        op = "and"
+
+    if op:
+        op_index = concept.index(op)
+        left = concept[:op_index]
+        right = concept[op_index + 1:]
+        return (
+            op,
+            _concept_to_lf(left),
+            _concept_to_lf(right)
+        )
+
+    if "not" in concept:
+        assert len(concept) == 2, f"unable to parse {concept}"
+        return ("not", (concept[1], ))
+
+    assert len(concept) == 1, f"unable to parse {concept}"
+    return (concept[0], )
+
+
+def concept_to_lf(concept, split=True):
+    if split:
+        concept = concept.split(" ")
+    return _concept_to_lf(concept)
+
+
+def lf_to_config_type(concept):
+    if len(concept) == 1:  # f
+        return (feature_type(concept[0]), )
+    elif len(concept) == 2:  # not(f)
+        assert concept[0] == "not"
+        return ("not", lf_to_config_type(concept[1]))
+    elif len(concept) == 3:
+        return (concept[0], lf_to_config_type(concept[1]), lf_to_config_type(concept[2]))
+
+
+def feature_type(feat):
+    if feat in shape.SHAPES:
+        return "shape"
+    elif feat in color.COLORS:
+        return "color"
+    else:
+        raise ValueError(f"Unknown feature {feat}")
 
 
 def is_singleton_shape(config):

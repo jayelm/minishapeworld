@@ -128,7 +128,7 @@ if __name__ == "__main__":
         "--oversample_shape_strategy",
         type=str,
         default="singleton_half",
-        choices=["singleton_half", "singleton_quarter", "any_2x"],
+        choices=["singleton_half", "singleton_quarter", "any_2x", "even"],
         help="Sample extra shapes for logical configs",
     )
     parser.add_argument(
