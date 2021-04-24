@@ -102,11 +102,16 @@ def concept_to_lf(concept, split=True):
 
 
 def lf_to_config_type(concept):
+    # XXX: what's the right way to categorize config type? As just "ors",
+    # "ands", and "singletons"? Maybe the right way is how I do metadata i.e.
+    # ignore shape/color?
     if len(concept) == 1:  # f
         return (feature_type(concept[0]), )
     elif len(concept) == 2:  # not(f)
         assert concept[0] == "not"
-        return ("not", lf_to_config_type(concept[1]))
+        #  return ("not", lf_to_config_type(concept[1]))
+        # Ignore nots?
+        return lf_to_config_type(concept[1])
     elif len(concept) == 3:
         return (concept[0], lf_to_config_type(concept[1]), lf_to_config_type(concept[2]))
 
