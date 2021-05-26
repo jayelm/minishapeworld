@@ -1,30 +1,15 @@
-# minishapeworld
+# ShapeWorld Data: Emergent Communication of Generalizations
 
-This is a super-lightweight version of ShapeWorld.
+Dataset code accompanying NeurIPS 2021 submission, Emergent Communication of
+Generalizations.
 
-Currently supported datasets:
+## Usage
 
-- Concept (multiple targets, multiple distractors, one caption)
-- Reference (single target, multiple distractors, one caption)
-- Caption (single target, one caption)
+Tested with `python3.8` though most versions should do. Install dependencies in
+`requirements.txt`, then run
 
-Crucially, datasets support "hard examples": i.e. if the
-target caption is "a red shape above a square", distractor images will include
-concepts like "a red shape above a circle", "a blue shape above a square", and
-"a red shape BELOW a square".
+- `emergent_generalization_shapeworld.sh` to make `shapeworld`
+- `emergent_generalization_shapeworld_ref.sh` to make `shapeworld_ref`
+- `emergent_generalization_shapeworld_all.sh` to make `shapeworld_all`
 
-The kinds of images (and captions) generated can be specified with the
-`--img_type` option:
-
-- `single`: Single existential captions (e.g. "blue square", "square", "blue
-    shape")
-- `spatial`: Spatial captions (e.g. "blue square", "square", "blue
-    shape")
-
-For spatial captions only (for now) you can specify the number of distractor shapes in each image with the `--n_distractors` option, specifying either a single number or two (`min`, `max`).
-
-## Dependencies
-
-- Python 3.6+
-- aggdraw
-- shapely
+The specific datasets are explained in the main codebase README.
