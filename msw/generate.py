@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--gen_same",
         action="store_true",
-        help="Generate val_same/test_s datasets consisting of same configs as train (requires --config_split)",
+        help="Generate val_same/test_same datasets consisting of same configs as train",
     )
     parser.add_argument(
         "--n_val_same",
@@ -194,9 +194,6 @@ if __name__ == "__main__":
         args.n_distractors = tuple(args.n_distractors)
     else:
         parser.error("--n_distractors must be either 1 int or 2 (min, max)")
-
-    if args.gen_same and not args.config_split:
-        parser.error("--config_split must be set to use --gen_same")
 
     cfg = config.CONFIGS[args.config_type]
 
