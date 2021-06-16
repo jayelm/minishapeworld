@@ -2,6 +2,7 @@
 
 python -m msw.generate --n_images 40 --n_correct 20 \
     --config_type logical \
+    --gen_same \
     --logical_ops and \
     --min_logical_len 2 \
     --max_logical_len 2 \
