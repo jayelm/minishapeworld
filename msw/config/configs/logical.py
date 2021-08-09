@@ -265,7 +265,7 @@ class LogicalConfig(configbase._ConfigBase, _LogicalConfigBase):
             else:
                 op = expr.Or
             formula = op(formula, exprs.pop(), simplify=False)
-        if formula.is_one() or not expr_is_satisfiable(f):
+        if formula.is_one() or not expr_is_satisfiable(formula):
             # Try again
             return cls.random(max_formula_len=max_formula_len)
         return cls(formula)

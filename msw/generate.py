@@ -223,6 +223,7 @@ if __name__ == "__main__":
         print(f"{len(train_configs)} train, {len(test_configs)} test")
     else:
         if args.enumerate_configs:
+            print(f"{len(configs)} configs")
             train_configs = configs
             test_configs = configs
         else:

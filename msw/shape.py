@@ -7,6 +7,8 @@ from shapely import affinity
 from shapely.geometry import Point, Polygon, box
 from pyeda.boolalg.bfarray import exprvars
 from pyeda.boolalg import expr
+import math
+import os
 
 from . import color
 from . import constants as C
@@ -19,6 +21,11 @@ def rand_size():
 def rand_size_2():
     """Slightly bigger."""
     return np.random.randint(C.SIZE_MIN + 2, C.SIZE_MAX + 2)
+
+
+def rand_size_3():
+    """Slightly bigger, with a bigger minimum"""
+    return np.random.randint(C.SIZE_MIN + 4, C.SIZE_MAX + 2)
 
 
 def rand_pos():
@@ -75,7 +82,7 @@ class Shape:
 
     def draw(self, image):
         acol = color.AGGDRAW_COLORS[self.color](self.color_variance)
-        image.draw.polygon(self.coords, acol["pen"])
+        image.draw.polygon(self.coords, acol["brush"], acol["pen"])
 
     def intersects(self, oth):
         return self.shape.intersects(oth.shape)
@@ -146,6 +153,14 @@ class Circle(Ellipse):
         image.draw.ellipse(self.coords, acol["brush"])
 
 
+class Semicircle(Circle):
+    def draw(self, image):
+        start_deg = np.random.randint(180)
+        end_deg = start_deg + 180
+        acol = color.AGGDRAW_COLORS[self.color](self.color_variance)
+        image.draw.pieslice(self.coords, start_deg, end_deg, acol["brush"], acol["pen"])
+
+
 class Rectangle(Shape):
     def init_shape(self, min_skew=1.5):
         self.dx = rand_size_2()
@@ -171,12 +186,6 @@ class Rectangle(Shape):
             .tolist()
         )
 
-    def draw(self, image):
-        acol = color.AGGDRAW_COLORS[self.color](self.color_variance)
-        image.draw.polygon(
-            self.coords, acol["brush"], acol["pen"],
-        )
-
 
 class Square(Rectangle):
     def init_shape(self):
@@ -187,6 +196,80 @@ class Square(Rectangle):
         self.shape = shape_
 
         # Get coords
+        self.coords = (
+            np.round(np.array(self.shape.exterior.coords)[:-1].flatten())
+            .astype(np.int)
+            .tolist()
+        )
+
+
+class Cross(Square):
+    def init_shape(self):
+        """
+        corners are:
+        a = (self.x, self.y)
+        b = (self.x + self.size, self.y)
+        c = (self.x, self.y + self.size)
+        d = (self.x + self.size, self.y + self.size)
+
+        width of cross is, let's imagine, 3. (must be less than self.size)
+        then distance from a to corner is
+
+        j = (a[0], a[1] + 3)
+        k = (a[0] + 3, a[1] + 3)
+        1 = (a[0] + 3, a[1])
+
+        2 = (b[0] - 3, b[1])
+        3 = (b[0] - 3, b[1] + 3)
+        4 = (b[0], b[1] + 3)
+
+        5 = (d[0], d[1] - 3)
+        6 = (d[0] - 3, d[1] - 3)
+        7 = (d[0] - 3, d[1])
+
+        8 = (c[0] + 3, c[1])
+        9 = (c[0] + 3, c[1] - 3)
+        i = (c[0], c[1] - 3)
+
+        a 1 . 2 b
+        j k . 3 4
+        . . . . .
+        i 9 . 6 5
+        c 8 . 7 d
+        """
+        self.size = rand_size_3()
+        self.cross_width = 3
+        assert self.cross_width < self.size, f"cross width too wide: {self.cross_width} < {self.size}"
+
+        a = (self.x, self.y)
+        b = (self.x + self.size, self.y)
+        c = (self.x, self.y + self.size)
+        d = (self.x + self.size, self.y + self.size)
+
+        coords = [
+            (a[0], a[1] + self.cross_width),
+            (a[0] + self.cross_width, a[1] + self.cross_width),
+            (a[0] + self.cross_width, a[1]),
+
+            (b[0] - self.cross_width, b[1]),
+            (b[0] - self.cross_width, b[1] + self.cross_width),
+            (b[0], b[1] + self.cross_width),
+
+            (d[0], d[1] - self.cross_width),
+            (d[0] - self.cross_width, d[1] - self.cross_width),
+            (d[0] - self.cross_width, d[1]),
+
+            (c[0] + self.cross_width, c[1]),
+            (c[0] + self.cross_width, c[1] - self.cross_width),
+            (c[0], c[1] - self.cross_width),
+        ]
+
+        shape_ = Polygon(coords)
+
+        # Rotation
+        shape_ = affinity.rotate(shape_, self.rotation)
+        self.shape = shape_
+
         self.coords = (
             np.round(np.array(self.shape.exterior.coords)[:-1].flatten())
             .astype(np.int)
@@ -221,10 +304,49 @@ class Triangle(Shape):
             .tolist()
         )
 
-    def draw(self, image):
-        acol = color.AGGDRAW_COLORS[self.color](self.color_variance)
-        image.draw.polygon(
-            self.coords, acol["brush"], acol["pen"],
+
+def _equilateral_polygon_vertices(x, y, n_vertices, size):
+    vertices = []
+    for i in range(n_vertices):
+        v = (
+            x + size * (math.cos(2 * math.pi * i / n_vertices)),
+            y + size * (math.sin(2 * math.pi * i / n_vertices))
+        )
+        vertices.append(v)
+    return vertices
+
+
+class Pentagon(Shape):
+    def init_shape(self):
+        self.size = rand_size_2()
+        shape_ = Polygon(
+            _equilateral_polygon_vertices(self.x, self.y, 5, self.size)
+        )
+        # Rotation
+        shape_ = affinity.rotate(shape_, self.rotation)
+        self.shape = shape_
+
+        self.coords = (
+            np.round(np.array(self.shape.exterior.coords)[:-1].flatten())
+            .astype(np.int)
+            .tolist()
+        )
+
+
+class Hexagon(Shape):
+    def init_shape(self):
+        self.size = rand_size_2()
+        shape_ = Polygon(
+            _equilateral_polygon_vertices(self.x, self.y, 6, self.size)
+        )
+        # Rotation
+        shape_ = affinity.rotate(shape_, self.rotation)
+        self.shape = shape_
+
+        self.coords = (
+            np.round(np.array(self.shape.exterior.coords)[:-1].flatten())
+            .astype(np.int)
+            .tolist()
         )
 
 
@@ -246,15 +368,28 @@ def new(existing_shape, shapes=None):
     return new_s
 
 
-SHAPES = ["circle", "square", "rectangle", "ellipse", "triangle"]
 SHAPE_IMPLS = {
     "circle": Circle,
     "ellipse": Ellipse,
     "square": Square,
     "rectangle": Rectangle,
-    "triangle": Triangle
-    # TODO: semicircle
+    "triangle": Triangle,
+    "semicircle": Semicircle,
+    "pentagon": Pentagon,
+    "cross": Cross,
+    "hexagon": Hexagon,
 }
+
+
+SHAPES = ["circle", "square", "rectangle", "ellipse", "triangle", "semicircle", "pentagon", "cross", "hexagon"]
+
+if "SHAPEWORLD_N_SHAPES" in os.environ:
+    N_SHAPES = int(os.environ['SHAPEWORLD_N_SHAPES'])
+    assert N_SHAPES < len(SHAPES), f"{N_SHAPES} requested, have {len(SHAPES)}"
+else:
+    N_SHAPES = 5  # original setting
+SHAPES = SHAPES[:N_SHAPES]
+
 
 SHAPE_VARS = exprvars('s', len(SHAPES))
 S2V = dict(zip(SHAPES, SHAPE_VARS))

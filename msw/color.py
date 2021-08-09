@@ -2,6 +2,7 @@ import aggdraw
 import numpy as np
 from pyeda.boolalg.bfarray import exprvars
 from pyeda.boolalg import expr
+import os
 
 
 class HSVColor:
@@ -115,10 +116,22 @@ COLORS2HSV = {
     "yellow": HSVColor(60 / 360),
     "white": HSVColor(60 / 360, s=0, v=1.0),
     "gray": HSVColor(30 / 360, s=0, v=0.44),
+    # Standard amount
+    "cyan": HSVColor(180 / 360),
+    "orange": HSVColor(30 / 360),
+    "purple": HSVColor(273 / 360),
+    "magenta": HSVColor(300 / 360),
 }
 
 
-COLORS = ["red", "blue", "green", "yellow", "white", "gray"]
+COLORS = ["red", "blue", "green", "yellow", "white", "gray", "cyan", "orange", "purple", "magenta"]
+
+if "SHAPEWORLD_N_COLORS" in os.environ:
+    N_COLORS = int(os.environ['SHAPEWORLD_N_COLORS'])
+    assert N_COLORS < len(COLORS), f"{N_COLORS} requested, have {len(COLORS)}"
+else:
+    N_COLORS = 6  # original setting
+COLORS = COLORS[:N_COLORS]
 
 AGGDRAW_COLORS = {
     c: color_factory(hsv_c, {"brush": aggdraw.Brush, "pen": aggdraw.Pen})
