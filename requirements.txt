@@ -4,4 +4,4 @@ pyeda==0.28.0
 aggdraw==1.3.12
 numpy==1.19.1
 h5py==2.10.0
-Pillow==8.2.0
+Pillow==9.0.0
