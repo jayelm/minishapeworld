@@ -2,15 +2,16 @@
 The image class which handles drawing/saving
 """
 
-from PIL import Image
 import aggdraw
 import numpy as np
-import constants as c
+from PIL import Image
+
+from . import constants as C
 
 
 class IMG:
     def __init__(self):
-        self.image = Image.new('RGB', (c.DIM, c.DIM))
+        self.image = Image.new("RGB", (C.DIM, C.DIM))
         self.draw = aggdraw.Draw(self.image)
 
     def draw_shapes(self, shapes, flush=True):
@@ -28,5 +29,5 @@ class IMG:
     def float_array(self):
         return np.divide(np.array(self.image), 255.0)
 
-    def save(self, path, filetype='PNG'):
+    def save(self, path, filetype="PNG"):
         self.image.save(path, filetype)
